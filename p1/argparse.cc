@@ -15,14 +15,14 @@ unordered_map<string, string> parse_args(int argc, char **argv,
     } else if (opts.count(token)) {
       i++;
       if (i >= argc) {
-        printf("argument %s missing value\n", token.c_str());
+        printf("option %s missing value\n", token.c_str());
         result.clear();
         return result;
       }
       string val(argv[i]);
       result[token] = val;
     } else {
-      printf("invalid option %s\n", token.c_str());
+      printf("invalid argument %s\n", token.c_str());
       result.clear();
       return result;
     }

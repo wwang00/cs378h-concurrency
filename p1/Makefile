@@ -1,8 +1,8 @@
 PROG = pfxsum
 CC = g++
-CPPFLAGS = -std=c++11 -stdlib=libc++ -Wall -O3
+CPPFLAGS = -std=c++11 -Wall -O3
 LDFLAGS = -stdlib=libc++
-OBJS = main.o argparse.o
+OBJS = main.o argparse.o scan.o
 
 $(PROG) : $(OBJS)
 	$(CC) $(LDFLAGS) -o $(PROG) $(OBJS)
@@ -12,6 +12,9 @@ main.o :
 
 argparse.o : argparse.h
 	$(CC) $(CPPFLAGS) -c argparse.cc
+
+scan.o : scan.h
+	$(CC) $(CPPFLAGS) -c scan.cc
 
 .PHONY : test
 test:
