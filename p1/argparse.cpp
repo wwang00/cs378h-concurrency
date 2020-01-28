@@ -1,6 +1,6 @@
 #include "argparse.h"
 
-#include <stdio.h>
+#include <iostream>
 
 using namespace std;
 
@@ -15,14 +15,14 @@ unordered_map<string, string> parse_args(int argc, char **argv,
     } else if (opts.count(token)) {
       i++;
       if (i >= argc) {
-        printf("option %s missing value\n", token.c_str());
+        cout << "option " << token << " missing value" << endl;
         result.clear();
         return result;
       }
       string val(argv[i]);
       result[token] = val;
     } else {
-      printf("invalid argument %s\n", token.c_str());
+      cout << "invalid argument " << token << endl;
       result.clear();
       return result;
     }
