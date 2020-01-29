@@ -25,15 +25,24 @@ T *pfx_scan_parallel(const T *arr, const size_t N, const size_t threads,
                      T (*scan_op)(const T &, const T &)) {
   T *result = (T *)malloc(N * sizeof(T));
   pthread_t tid[threads];
-  pfx_scan_parallel_args<T> args(arr, N, scan_op);
+  pfx_scan_parallel_args<T> *args_list = (pfx_scan_parallel_args<T> *)malloc(
+      threads * sizeof(pfx_scan_parallel_args<T>));
   for (int t = 0; t < threads; t++) {
-    pthread_create(&tid[t], nullptr, pfx_scan_parallel_worker<T>, (void *)&args);
+    pfx_scan_parallel_args<T> *args =
+        new (&args_list[t]) pfx_scan_parallel_args<T>(t, arr, N, scan_op, result);
+    pthread_create(&tid[t], nullptr, pfx_scan_parallel_worker<T>, (void *)args);
   }
+  for (int t = 0; t < threads; t++) {
+    pthread_join(tid[t], nullptr);
+  }
+  free(args_list);
   return result;
 }
 
 template <class T>
-void *pfx_scan_parallel_worker(void *args) { return nullptr; }
+void *pfx_scan_parallel_worker(void *args) {
+  return nullptr;
+}
 
 /* special case for vectors */
 

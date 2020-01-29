@@ -48,6 +48,7 @@ int main(int argc, char **argv) {
     }
     auto t1 = chrono::system_clock::now();
     cout << (t1 - t0) / chrono::milliseconds(1) << endl;
+    cout << "begin output" << endl;
     // write to output file
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < dim; j++) {
@@ -56,7 +57,7 @@ int main(int argc, char **argv) {
       fout << endl;
     }
   } else {  // integer data
-    struct int_pad *input = (int_pad *)malloc(N * sizeof(int_pad));
+    int_pad *input = (int_pad *)malloc(N * sizeof(int_pad));
     for (int i = 0; i < N; i++) {
       fin >> input[i].v;
     }
@@ -70,6 +71,7 @@ int main(int argc, char **argv) {
     }
     auto t1 = chrono::system_clock::now();
     cout << (t1 - t0) / chrono::milliseconds(1) << endl;
+    cout << "begin output" << endl;
     // write to output file
     for (int i = 0; i < N; i++) {
       fout << result[i].v << endl;
