@@ -29,25 +29,22 @@ int main(int argc, char **argv) {
   fin >> dim >> N;
   if (dim > 0) {  // FP vector data
     fp_vector *input = (fp_vector *)malloc(N * sizeof(fp_vector));
-    string line;
+    string elem;
     for (int i = 0; i < N; i++) {
       fp_vector &vec = *new (&input[i]) fp_vector(dim);
-      line.clear();
-      fin >> line;
-      char *elem = strtok((char *)line.c_str(), ",\n");
       for (int j = 0; j < dim; j++) {
-        vec.v[j] = strtof(elem, nullptr);
-        elem = strtok(nullptr, ",\n");
+        getline(fin, elem, j == dim - 1 ? '\n' : ',');
+        vec.v[j] = stof(elem);
       }
     }
     // timed work
     fp_vector *result;
     auto t0 = chrono::system_clock::now();
     if (threads == 0) {  // sequential
-      result = pfx_scan_sequential<fp_vector, fp_vector::scan_op>(input, N);
+      result = pfx_scan_sequential<fp_vector>(input, N, fp_vector::scan_op);
     } else {  // parallel
       result =
-          pfx_scan_parallel<fp_vector, fp_vector::scan_op>(input, N, threads);
+          pfx_scan_parallel<fp_vector>(input, N, threads, fp_vector::scan_op);
     }
     auto t1 = chrono::system_clock::now();
     cout << (t1 - t0) / chrono::milliseconds(1) << endl;
@@ -67,9 +64,9 @@ int main(int argc, char **argv) {
     int_pad *result;
     auto t0 = chrono::system_clock::now();
     if (threads == 0) {  // sequential
-      result = pfx_scan_sequential<int_pad, int_pad::scan_op>(input, N);
+      result = pfx_scan_sequential<int_pad>(input, N, int_pad::scan_op);
     } else {  // parallel
-      result = pfx_scan_parallel<int_pad, int_pad::scan_op>(input, N, threads);
+      result = pfx_scan_parallel<int_pad>(input, N, threads, int_pad::scan_op);
     }
     auto t1 = chrono::system_clock::now();
     cout << (t1 - t0) / chrono::milliseconds(1) << endl;

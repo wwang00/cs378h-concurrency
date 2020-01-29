@@ -7,8 +7,9 @@
 
 /* for primitive types */
 
-template <class T, T (*scan_op)(const T &, const T &)>
-T *pfx_scan_sequential(const T *arr, const size_t N) {
+template <class T>
+T *pfx_scan_sequential(const T *arr, const size_t N,
+                       T (*scan_op)(const T &, const T &)) {
   T *result = (T *)malloc(N * sizeof(T));
   T acc = 0;
   result[0] = acc;
@@ -19,8 +20,9 @@ T *pfx_scan_sequential(const T *arr, const size_t N) {
   return result;
 }
 
-template <class T, T (*scan_op)(const T &, const T &)>
-T *pfx_scan_parallel(const T *arr, const size_t N, const size_t threads) {
+template <class T>
+T *pfx_scan_parallel(const T *arr, const size_t N, const size_t threads,
+                     T (*scan_op)(const T &, const T &)) {
   T *result = (T *)malloc(N * sizeof(T));
   return result;
 }
@@ -28,8 +30,9 @@ T *pfx_scan_parallel(const T *arr, const size_t N, const size_t threads) {
 /* special case for vectors due to unknown dimension */
 
 template <>
-fp_vector *pfx_scan_sequential<fp_vector, fp_vector::scan_op>(
-    const fp_vector *arr, const size_t N) {
+fp_vector *pfx_scan_sequential<fp_vector>(
+    const fp_vector *arr, const size_t N,
+    fp_vector (*scan_op)(const fp_vector &, const fp_vector &)) {
   fp_vector *result = (fp_vector *)malloc(N * sizeof(fp_vector));
   fp_vector acc(arr[0].dim);
   result[0] = acc;
