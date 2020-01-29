@@ -1,16 +1,15 @@
 #include <pthread.h>
 #include <stdlib.h>
 
-#include "scan_ops.h"
-
 template <class T, T (*scan_op)(const T &, const T &)>
 T *pfx_scan_sequential(const T *arr, const size_t N) {
   T *result = (T *)malloc(N * sizeof(T));
-  T acc{};
+  T acc = arr[0];
   result[0] = acc;
+  result[0].clear(); // reset first element without knowing constructor
   for (int i = 1; i < N; i++) {
-    acc = scan_op(acc, arr[i - 1]);
     result[i] = acc;
+    acc = scan_op(acc, arr[i]);
   }
   return result;
 }
