@@ -2,7 +2,6 @@
 
 #include <chrono>
 #include <fstream>
-#include <iostream>
 #include <vector>
 
 #include "argparse.h"
@@ -30,10 +29,15 @@ int main(int argc, char **argv) {
   fin >> dim >> N;
   if (dim > 0) {  // FP vector data
     fp_vector *input = (fp_vector *)malloc(N * sizeof(fp_vector));
+    string line;
     for (int i = 0; i < N; i++) {
-      fp_vector vec = *new (&input[i]) fp_vector(dim);
+      fp_vector &vec = *new (&input[i]) fp_vector(dim);
+      line.clear();
+      fin >> line;
+      char *elem = strtok((char *)line.c_str(), ",\n");
       for (int j = 0; j < dim; j++) {
-        fin >> vec.v[j];
+        vec.v[j] = strtof(elem, nullptr);
+        elem = strtok(nullptr, ",\n");
       }
     }
     // timed work
@@ -50,7 +54,7 @@ int main(int argc, char **argv) {
     // write to output file
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < dim; j++) {
-        fout << result[i].v[j] << " ";
+        fout << result[i].v[j] << (j == dim - 1 ? "" : ",");
       }
       fout << endl;
     }

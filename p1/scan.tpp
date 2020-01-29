@@ -1,15 +1,33 @@
 #include <pthread.h>
 #include <stdlib.h>
 
+#include <iostream>
+
+#include "scan_types.h"
+
+// for primitive types
 template <class T, T (*scan_op)(const T &, const T &)>
 T *pfx_scan_sequential(const T *arr, const size_t N) {
   T *result = (T *)malloc(N * sizeof(T));
-  T acc = arr[0];
+  T acc{};
   result[0] = acc;
-  result[0].clear(); // reset first element without knowing constructor
   for (int i = 1; i < N; i++) {
+    acc = scan_op(acc, arr[i - 1]);
     result[i] = acc;
-    acc = scan_op(acc, arr[i]);
+  }
+  return result;
+}
+
+// special case for vectors due to unknown dimension
+template <>
+fp_vector *pfx_scan_sequential<fp_vector, fp_vector::scan_op>(
+    const fp_vector *arr, const size_t N) {
+  fp_vector *result = (fp_vector *)malloc(N * sizeof(fp_vector));
+  fp_vector acc(arr[0].dim);
+  result[0] = acc;
+  for (int i = 1; i < N; i++) {
+    acc = fp_vector::scan_op(acc, arr[i - 1]);
+    result[i] = acc;
   }
   return result;
 }
