@@ -13,9 +13,9 @@ T *pfx_scan_sequential(const T *arr, const size_t N,
   T *result = (T *)malloc(N * sizeof(T));
   T acc = 0;
   result[0] = acc;
-  for (int i = 1; i < N; i++) {
-    acc = scan_op(acc, arr[i - 1]);
-    result[i] = acc;
+  for (int i = 0; i < N - 1; i++) {
+    acc = scan_op(acc, arr[i]);
+    result[i + 1] = acc;
   }
   return result;
 }
@@ -24,10 +24,18 @@ template <class T>
 T *pfx_scan_parallel(const T *arr, const size_t N, const size_t threads,
                      T (*scan_op)(const T &, const T &)) {
   T *result = (T *)malloc(N * sizeof(T));
+  pthread_t tid[threads];
+  pfx_scan_parallel_args<T> args(arr, N, scan_op);
+  for (int t = 0; t < threads; t++) {
+    pthread_create(&tid[t], nullptr, pfx_scan_parallel_worker<T>, (void *)&args);
+  }
   return result;
 }
 
-/* special case for vectors due to unknown dimension */
+template <class T>
+void *pfx_scan_parallel_worker(void *args) { return nullptr; }
+
+/* special case for vectors */
 
 template <>
 fp_vector *pfx_scan_sequential<fp_vector>(

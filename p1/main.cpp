@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
       fout << endl;
     }
   } else {  // integer data
-    int_pad *input = (int_pad *)malloc(N * sizeof(int_pad));
+    struct int_pad *input = (int_pad *)malloc(N * sizeof(int_pad));
     for (int i = 0; i < N; i++) {
       fin >> input[i].v;
     }
