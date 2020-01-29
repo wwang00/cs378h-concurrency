@@ -16,6 +16,11 @@ struct int_pad {
 
   int_pad(int v) : v(v) {}
 
+  int_pad &operator=(const int v) {
+    this->v = v;
+    return *this;
+  }
+
   static int_pad scan_op(const int_pad &x, const int_pad &y) {
     return int_pad(x.v + y.v);
   }
