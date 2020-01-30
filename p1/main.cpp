@@ -28,14 +28,15 @@ int main(int argc, char **argv) {
   // read input and do work
   fin >> dim >> N;
   if (dim > 0) {  // FP vector data
-    fp_vector *input = (fp_vector *)malloc(N * sizeof(fp_vector));
+    fp_vector *input = (fp_vector *)calloc(N, sizeof(fp_vector));
     string elem;
     for (int i = 0; i < N; i++) {
-      fp_vector &vec = *new (&input[i]) fp_vector(dim);
+      fp_vector vec(dim);
       for (int j = 0; j < dim; j++) {
         getline(fin, elem, j == dim - 1 ? '\n' : ',');
         vec.v[j] = stof(elem);
       }
+      input[i] = vec;
     }
     // timed work
     fp_vector *result;
@@ -43,12 +44,11 @@ int main(int argc, char **argv) {
     if (threads == 0) {  // sequential
       result = pfx_scan_sequential<fp_vector>(input, N, fp_vector::add);
     } else {  // parallel
-      result =
-          pfx_scan_parallel<fp_vector>(input, N, threads, fp_vector::add);
+      result = pfx_scan_parallel<fp_vector>(input, N, threads, fp_vector::add);
     }
     auto t1 = chrono::system_clock::now();
     cout << (t1 - t0) / chrono::milliseconds(1) << endl;
-    cout << "begin output" << endl;
+    // cout << "begin output" << endl;
     // write to output file
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < dim; j++) {
@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
     }
     auto t1 = chrono::system_clock::now();
     cout << (t1 - t0) / chrono::milliseconds(1) << endl;
-    cout << "begin output" << endl;
+    // cout << "begin output" << endl;
     // write to output file
     for (int i = 0; i < N; i++) {
       fout << result[i].v << endl;

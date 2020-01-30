@@ -28,9 +28,51 @@ struct int_pad {
 
 struct fp_vector {
   size_t dim;
-  std::vector<float> v;
+  float *v;
 
-  fp_vector(size_t dim) : dim(dim), v(dim) {}
+  fp_vector() : dim(0), v(nullptr) {
+    // std::cout << "creating fp_vector default" << std::endl;
+  }
+
+  fp_vector(size_t dim) : dim(dim), v((float *)calloc(dim, sizeof(float))) {
+    // std::cout << "creating fp_vector" << std::endl;
+  }
+
+  fp_vector(const fp_vector &copy)
+      : dim(copy.dim), v((float *)malloc(copy.dim * sizeof(float))) {
+    // std::cout << "copying fp_vector" << std::endl;
+    for (int i = 0; i < dim; i++) {
+      v[i] = copy.v[i];
+    }
+  }
+
+  fp_vector &operator=(const fp_vector &copy) {
+    // std::cout << "copying fp_vector assignment" << std::endl;
+    dim = copy.dim;
+    if (v != nullptr) {
+      free(v);
+    }
+    v = (float *)malloc(dim * sizeof(float));
+    for (int i = 0; i < dim; i++) {
+      v[i] = copy.v[i];
+    }
+    return *this;
+  }
+
+  fp_vector &operator=(float x) {
+    // std::cout << "assigning fp_vector int" << std::endl;
+    if (v != nullptr) {
+      for (int i = 0; i < dim; i++) {
+        v[i] = x;
+      }
+    }
+    return *this;
+  }
+
+  ~fp_vector() {
+    // std::cout << "deleting fp_vector" << std::endl;
+    free(v);
+  }
 
   static fp_vector add(const fp_vector &x, const fp_vector &y) {
     size_t dim = x.dim;
