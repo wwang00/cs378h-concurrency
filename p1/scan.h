@@ -15,8 +15,8 @@ template <class T>
 void *pfx_scan_parallel_worker(void *args);
 
 class barrier;
-extern barrier *bar;
 
+extern barrier *bar;
 extern int step;
 
 template <class T>
