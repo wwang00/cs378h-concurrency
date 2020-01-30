@@ -27,14 +27,14 @@ struct int_pad {
 };
 
 struct fp_vector {
-  size_t dim;
+  int dim;
   float *v;
 
   fp_vector() : dim(0), v(nullptr) {
     // std::cout << "creating fp_vector default" << std::endl;
   }
 
-  fp_vector(size_t dim) : dim(dim), v((float *)calloc(dim, sizeof(float))) {
+  fp_vector(int dim) : dim(dim), v((float *)calloc(dim, sizeof(float))) {
     // std::cout << "creating fp_vector" << std::endl;
   }
 
@@ -71,11 +71,13 @@ struct fp_vector {
 
   ~fp_vector() {
     // std::cout << "deleting fp_vector" << std::endl;
-    free(v);
+    if (v != nullptr) {
+      free(v);
+    }
   }
 
   static fp_vector add(const fp_vector &x, const fp_vector &y) {
-    size_t dim = x.dim;
+    int dim = x.dim;
     fp_vector result(dim);
     for (int i = 0; i < dim; i++) {
       result.v[i] = x.v[i] + y.v[i];

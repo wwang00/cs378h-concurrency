@@ -11,9 +11,9 @@
 using namespace std;
 
 int main(int argc, char **argv) {
-  size_t N;        // number of input data
-  size_t dim;      // FP vector dimension
-  size_t threads;  // parallelism
+  int N;        // number of input data
+  int dim;      // FP vector dimension
+  int threads;  // parallelism
   // parse args
   unordered_set<string> flags{"-s"};
   unordered_set<string> opts{"-n", "-i", "-o"};

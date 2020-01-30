@@ -4,12 +4,13 @@
 #include <pthread.h>
 
 class barrier {
-  size_t limit, count;
+  int limit, count;
+  bool phase;
   pthread_mutex_t mutex;
   pthread_cond_t ready;
 
  public:
-  barrier(size_t limit) : limit(limit), count(limit) {
+  barrier(int limit) : limit(limit), count(limit), phase(false) {
     mutex = PTHREAD_MUTEX_INITIALIZER;
     ready = PTHREAD_COND_INITIALIZER;
   }
@@ -18,13 +19,15 @@ class barrier {
     pthread_mutex_lock(&mutex);
     if (--count == 0) {
       count = limit;
+      phase = !phase;
       pthread_cond_broadcast(&ready);
       pthread_mutex_unlock(&mutex);
       return;
     }
+    bool p = phase;
     do {
       pthread_cond_wait(&ready, &mutex);
-    } while (count > 0);
+    } while (p == phase);
     pthread_mutex_unlock(&mutex);
   }
 };
