@@ -1,6 +1,8 @@
 #ifndef _SCAN_H_
 #define _SCAN_H_
 
+#include <stdlib.h>
+
 template <class T>
 T *pfx_scan_sequential(const T *arr, const size_t N,
                        T (*scan_op)(const T &, const T &));
@@ -11,6 +13,11 @@ T *pfx_scan_parallel(const T *arr, const size_t N, const size_t threads,
 
 template <class T>
 void *pfx_scan_parallel_worker(void *args);
+
+class barrier;
+extern barrier *bar;
+
+extern int step;
 
 template <class T>
 struct pfx_scan_parallel_args {

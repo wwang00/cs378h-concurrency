@@ -21,7 +21,7 @@ struct int_pad {
     return *this;
   }
 
-  static int_pad scan_op(const int_pad &x, const int_pad &y) {
+  static int_pad add(const int_pad &x, const int_pad &y) {
     return int_pad(x.v + y.v);
   }
 };
@@ -32,7 +32,7 @@ struct fp_vector {
 
   fp_vector(size_t dim) : dim(dim), v(dim) {}
 
-  static fp_vector scan_op(const fp_vector &x, const fp_vector &y) {
+  static fp_vector add(const fp_vector &x, const fp_vector &y) {
     size_t dim = x.dim;
     fp_vector result(dim);
     for (int i = 0; i < dim; i++) {

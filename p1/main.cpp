@@ -41,10 +41,10 @@ int main(int argc, char **argv) {
     fp_vector *result;
     auto t0 = chrono::system_clock::now();
     if (threads == 0) {  // sequential
-      result = pfx_scan_sequential<fp_vector>(input, N, fp_vector::scan_op);
+      result = pfx_scan_sequential<fp_vector>(input, N, fp_vector::add);
     } else {  // parallel
       result =
-          pfx_scan_parallel<fp_vector>(input, N, threads, fp_vector::scan_op);
+          pfx_scan_parallel<fp_vector>(input, N, threads, fp_vector::add);
     }
     auto t1 = chrono::system_clock::now();
     cout << (t1 - t0) / chrono::milliseconds(1) << endl;
@@ -65,9 +65,9 @@ int main(int argc, char **argv) {
     int_pad *result;
     auto t0 = chrono::system_clock::now();
     if (threads == 0) {  // sequential
-      result = pfx_scan_sequential<int_pad>(input, N, int_pad::scan_op);
+      result = pfx_scan_sequential<int_pad>(input, N, int_pad::add);
     } else {  // parallel
-      result = pfx_scan_parallel<int_pad>(input, N, threads, int_pad::scan_op);
+      result = pfx_scan_parallel<int_pad>(input, N, threads, int_pad::add);
     }
     auto t1 = chrono::system_clock::now();
     cout << (t1 - t0) / chrono::milliseconds(1) << endl;
