@@ -10,9 +10,9 @@ template <class T>
 void pfx_scan_sequential(T *arr, const int N,
                          T (*scan_op)(const T &, const T &)) {
   T acc = arr[0];
-  for (int i = 1; i < N; i++) {
-    acc = scan_op(acc, arr[i]);
-    arr[i] = acc;
+  for (int t = 1; t < N; t++) {
+    acc = scan_op(acc, arr[t]);
+    arr[t] = acc;
   }
 }
 
@@ -45,17 +45,27 @@ void *pfx_scan_parallel_worker(void *args_) {
   int threads = args->threads;
   auto scan_op = args->scan_op;
   while (step < N) {
-    T temp[N];
+    int elems = N / threads + 1;
+    T temp[elems];
     int start = step + num;
     // calculate locally
-    for (int i = start; i < N; i += threads) {
-      temp[i] = scan_op(arr[i], arr[i - step]);
+    for (int t = 0; t < elems; t++) {
+      int a = start + t * threads;
+      if (a >= N) {
+        break;
+      }
+      temp[t] = scan_op(arr[a], arr[a - step]);
     }
     bar->wait();
     // commit results
-    for (int i = start; i < N; i += threads) {
-      arr[i] = temp[i];
+    for (int t = 0; t < elems; t++) {
+      int a = start + t * threads;
+      if (a >= N) {
+        break;
+      }
+      arr[a] = temp[t];
     }
+    // one thread increments step
     if (num == 0) {
       step *= 2;
     }
