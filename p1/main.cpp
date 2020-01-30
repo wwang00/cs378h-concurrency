@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
   // read input and do work
   fin >> dim >> N;
   if (dim > 0) {  // FP vector data
-    fp_vector *input = (fp_vector *)calloc(N, sizeof(fp_vector));
+    fp_vector *arr = (fp_vector *)calloc(N, sizeof(fp_vector));
     string elem;
     for (int i = 0; i < N; i++) {
       fp_vector vec(dim);
@@ -36,15 +36,14 @@ int main(int argc, char **argv) {
         getline(fin, elem, j == dim - 1 ? '\n' : ',');
         vec.v[j] = stof(elem);
       }
-      input[i] = vec;
+      arr[i] = vec;
     }
     // timed work
-    fp_vector *result;
     auto t0 = chrono::system_clock::now();
     if (threads == 0) {  // sequential
-      result = pfx_scan_sequential<fp_vector>(input, N, fp_vector::add);
+      pfx_scan_sequential<fp_vector>(arr, N, fp_vector::add);
     } else {  // parallel
-      result = pfx_scan_parallel<fp_vector>(input, N, threads, fp_vector::add);
+      pfx_scan_parallel<fp_vector>(arr, N, threads, fp_vector::add);
     }
     auto t1 = chrono::system_clock::now();
     cout << (t1 - t0) / chrono::milliseconds(1) << endl;
@@ -52,29 +51,28 @@ int main(int argc, char **argv) {
     // write to output file
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < dim; j++) {
-        fout << result[i].v[j] << (j == dim - 1 ? "" : ",");
+        fout << arr[i].v[j] << (j == dim - 1 ? "" : ",");
       }
       fout << endl;
     }
   } else {  // integer data
-    int_pad *input = (int_pad *)malloc(N * sizeof(int_pad));
+    int_pad *arr = (int_pad *)malloc(N * sizeof(int_pad));
     for (int i = 0; i < N; i++) {
-      fin >> input[i].v;
+      fin >> arr[i].v;
     }
     // timed work
-    int_pad *result;
     auto t0 = chrono::system_clock::now();
     if (threads == 0) {  // sequential
-      result = pfx_scan_sequential<int_pad>(input, N, int_pad::add);
+      pfx_scan_sequential<int_pad>(arr, N, int_pad::add);
     } else {  // parallel
-      result = pfx_scan_parallel<int_pad>(input, N, threads, int_pad::add);
+      pfx_scan_parallel<int_pad>(arr, N, threads, int_pad::add);
     }
     auto t1 = chrono::system_clock::now();
     cout << (t1 - t0) / chrono::milliseconds(1) << endl;
     // cout << "begin output" << endl;
     // write to output file
     for (int i = 0; i < N; i++) {
-      fout << result[i].v << endl;
+      fout << arr[i].v << endl;
     }
   }
   fin.close();

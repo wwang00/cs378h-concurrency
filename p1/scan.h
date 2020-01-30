@@ -4,12 +4,12 @@
 #include <stdlib.h>
 
 template <class T>
-T *pfx_scan_sequential(const T *arr, const size_t N,
-                       T (*scan_op)(const T &, const T &));
+void pfx_scan_sequential(T *arr, const size_t N,
+                         T (*scan_op)(const T &, const T &));
 
 template <class T>
-T *pfx_scan_parallel(const T *arr, const size_t N, const size_t threads,
-                     T (*scan_op)(const T &, const T &));
+void pfx_scan_parallel(T *arr, const size_t N, const size_t threads,
+                       T (*scan_op)(const T &, const T &));
 
 template <class T>
 void *pfx_scan_parallel_worker(void *args);
@@ -22,14 +22,13 @@ extern int step;
 template <class T>
 struct pfx_scan_parallel_args {
   const int num;
-  const T *arr;
+  T *arr;
   const size_t N;
   T (*scan_op)(const T &, const T &);
-  T *result;
 
-  pfx_scan_parallel_args(const int num, const T *arr, const size_t N,
-                         T (*scan_op)(const T &, const T &), T *result)
-      : num(num), arr(arr), N(N), scan_op(scan_op), result(result) {}
+  pfx_scan_parallel_args(const int num, T *arr, const size_t N,
+                         T (*scan_op)(const T &, const T &))
+      : num(num), arr(arr), N(N), scan_op(scan_op) {}
 };
 
 #include "scan.tpp"
