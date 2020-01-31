@@ -5,12 +5,12 @@
 
 class barrier {
   int limit, count;
-  bool phase;
+  bool toggle;
   pthread_mutex_t mutex;
   pthread_cond_t ready;
 
  public:
-  barrier(int limit) : limit(limit), count(limit), phase(false) {
+  barrier(int limit) : limit(limit), count(limit), toggle(false) {
     mutex = PTHREAD_MUTEX_INITIALIZER;
     ready = PTHREAD_COND_INITIALIZER;
   }
@@ -19,15 +19,15 @@ class barrier {
     pthread_mutex_lock(&mutex);
     if (--count == 0) {
       count = limit;
-      phase = !phase;
+      toggle = !toggle;
       pthread_cond_broadcast(&ready);
       pthread_mutex_unlock(&mutex);
       return;
     }
-    bool p = phase;
+    bool t = toggle;
     do {
       pthread_cond_wait(&ready, &mutex);
-    } while (p == phase);
+    } while (t == toggle);
     pthread_mutex_unlock(&mutex);
   }
 };

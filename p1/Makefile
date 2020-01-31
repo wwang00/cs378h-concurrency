@@ -1,7 +1,7 @@
 PROG = pfxsum
 CC = g++
 CPPFLAGS = -std=c++11 -Wall -O3
-LDFLAGS = -stdlib=libc++
+LDFLAGS = -std=c++11 -pthread
 OBJS = main.o argparse.o scan.o
 
 $(PROG) : $(OBJS)
@@ -18,8 +18,9 @@ argparse.o : argparse.h
 
 .PHONY : test
 test:
+	make clean
 	make
-	./pfxsum < test.in > test.out
+	./pfxsum -n $(n) -i $(f).in -o $(f).out
 
 .PHONY : clean
 clean :
