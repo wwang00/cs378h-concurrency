@@ -1,6 +1,6 @@
 PROG = pfxsum
 CC = g++
-CPPFLAGS = -std=c++11 -Wall -O3
+CPPFLAGS = -std=c++11 -Wall -O3 -g
 LDFLAGS = -std=c++11 -pthread
 OBJS = main.o argparse.o scan.o
 
