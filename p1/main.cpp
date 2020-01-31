@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
       pfx_scan_parallel<fp_vector>(arr, N, threads, fp_vector::add);
     }
     auto t1 = chrono::system_clock::now();
-    cout << (t1 - t0) / chrono::milliseconds(1) << endl;
+    cout << (t1 - t0) / chrono::microseconds(1) << endl;
     // cout << "begin output" << endl;
     // write to output file
     for (int i = 0; i < N; i++) {
@@ -68,7 +68,7 @@ int main(int argc, char **argv) {
       pfx_scan_parallel<int_pad>(arr, N, threads, int_pad::add);
     }
     auto t1 = chrono::system_clock::now();
-    cout << (t1 - t0) / chrono::milliseconds(1) << endl;
+    cout << (t1 - t0) / chrono::microseconds(1) << endl;
     // cout << "begin output" << endl;
     // write to output file
     for (int i = 0; i < N; i++) {

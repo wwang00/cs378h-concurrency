@@ -45,24 +45,26 @@ void *pfx_scan_parallel_worker(void *args_) {
   int threads = args->threads;
   auto scan_op = args->scan_op;
   while (step < N) {
-    int elems = N / threads + 1;
-    T temp[elems];
     int start = step + num;
+    if (start >= N) {
+      bar->wait();
+      bar->wait();
+      continue;
+    }
+    int elems;
+    if ((elems = (N - start) / threads) * threads != N - start) {
+      elems++;
+    }
+    T temp[elems];
     // calculate locally
     for (int t = 0; t < elems; t++) {
       int a = start + t * threads;
-      if (a >= N) {
-        break;
-      }
       temp[t] = scan_op(arr[a], arr[a - step]);
     }
     bar->wait();
     // commit results
     for (int t = 0; t < elems; t++) {
       int a = start + t * threads;
-      if (a >= N) {
-        break;
-      }
       arr[a] = temp[t];
     }
     // one thread increments step

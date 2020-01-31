@@ -6,11 +6,8 @@
 #include <iostream>
 #include <vector>
 
-#define CACHE_LINE_SIZE 64
-
 struct int_pad {
   int v;
-  char padding[CACHE_LINE_SIZE - sizeof(int)];
 
   int_pad() : v(0) {}
 
