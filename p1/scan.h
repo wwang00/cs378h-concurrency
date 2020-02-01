@@ -12,7 +12,10 @@ void pfx_scan_parallel(T *arr, const int N, const int threads,
                        T (*scan_op)(const T &, const T &));
 
 template <class T>
-void *pfx_scan_parallel_worker(void *args);
+void *pfx_scan_max_parallelism(void *args);
+
+template <class T>
+void *pfx_scan_work_efficient(void *args);
 
 class barrier;
 
@@ -21,7 +24,6 @@ struct pfx_scan_parallel_args {
   const int num;
   barrier *bar;
   int *step;
-  T *temp;
   T *arr;
   const int N;
   const int threads;
@@ -29,13 +31,12 @@ struct pfx_scan_parallel_args {
 
   pfx_scan_parallel_args() : num(-1), N(-1), threads(-1) {}
 
-  pfx_scan_parallel_args(const int num, barrier *bar, int *step, T *temp,
-                         T *arr, const int N, const int threads,
+  pfx_scan_parallel_args(const int num, barrier *bar, int *step, T *arr,
+                         const int N, const int threads,
                          T (*scan_op)(const T &, const T &))
       : num(num),
         bar(bar),
         step(step),
-        temp(temp),
         arr(arr),
         N(N),
         threads(threads),

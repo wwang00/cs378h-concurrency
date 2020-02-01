@@ -4,7 +4,6 @@
 #include <stdlib.h>
 
 #include <iostream>
-#include <vector>
 
 struct int_pad {
   int v;
