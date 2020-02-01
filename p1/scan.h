@@ -16,20 +16,30 @@ void *pfx_scan_parallel_worker(void *args);
 
 class barrier;
 
-extern barrier *bar;
-extern int step;
-
 template <class T>
 struct pfx_scan_parallel_args {
   const int num;
+  barrier *bar;
+  int *step;
+  T *temp;
   T *arr;
   const int N;
   const int threads;
   T (*scan_op)(const T &, const T &);
 
-  pfx_scan_parallel_args(const int num, T *arr, const int N, const int threads,
+  pfx_scan_parallel_args() : num(-1), N(-1), threads(-1) {}
+
+  pfx_scan_parallel_args(const int num, barrier *bar, int *step, T *temp,
+                         T *arr, const int N, const int threads,
                          T (*scan_op)(const T &, const T &))
-      : num(num), arr(arr), N(N), threads(threads), scan_op(scan_op) {}
+      : num(num),
+        bar(bar),
+        step(step),
+        temp(temp),
+        arr(arr),
+        N(N),
+        threads(threads),
+        scan_op(scan_op) {}
 };
 
 #include "scan.tpp"

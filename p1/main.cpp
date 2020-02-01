@@ -2,7 +2,6 @@
 
 #include <chrono>
 #include <fstream>
-#include <vector>
 
 #include "argparse.h"
 #include "scan.h"
