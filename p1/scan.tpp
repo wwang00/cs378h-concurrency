@@ -7,7 +7,7 @@
 #include "barrier.h"
 #include "scan_types.h"
 
-#define PARALLEL_WORKER pfx_scan_max_parallelism
+#define PARALLEL_VAR 0
 
 template <class T>
 void pfx_scan_sequential(T *arr, const int N,
@@ -25,17 +25,31 @@ void pfx_scan_parallel(T *arr, const int N, const int threads,
   pthread_t tid[threads];
   pfx_scan_parallel_args<T> args_list[threads];
   barrier bar(threads);
-  int step = 1;
+  int step;
+  void *(*worker)(void *);
+  switch (PARALLEL_VAR) {
+    case 1: {
+      step = 2;
+      worker = pfx_scan_work_efficient<T>;
+      break;
+    }
+    default: {
+      step = 1;
+      worker = pfx_scan_max_parallelism<T>;
+      break;
+    }
+  }
   for (int t = 0; t < threads; t++) {
     auto args = new (&args_list[t])
         pfx_scan_parallel_args<T>(t, &bar, &step, arr, N, threads, scan_op);
-    pthread_create(&tid[t], nullptr, PARALLEL_WORKER<T>, (void *)args);
+    pthread_create(&tid[t], nullptr, worker, (void *)args);
   }
   for (int t = 0; t < threads; t++) {
     pthread_join(tid[t], nullptr);
   }
 }
 
+// https://commons.wikimedia.org/wiki/File:Hillis-Steele_Prefix_Sum.svg
 template <class T>
 void *pfx_scan_max_parallelism(void *args_) {
   auto args = (pfx_scan_parallel_args<T> *)args_;
@@ -47,33 +61,28 @@ void *pfx_scan_max_parallelism(void *args_) {
   int threads = args->threads;
   auto scan_op = args->scan_op;
   int step_local;
-  while ((step_local = *step) < N) {
-    int elems;
-    if ((elems = (N - step_local) / threads) * threads != N - step_local) {
-      elems++;
-    }
+  while ((step_local = *step) <= N) {
+    int elems = N - step_local;
+    elems = elems / threads + 1;
     int start = step_local + num * elems;
-    int max_elems = N - start;
-    if (max_elems <= 0) {
-      bar->wait();
-      bar->wait();
-      continue;
-    } else if (max_elems < elems) {
-      elems = max_elems;
-    }
+    // compute locally
     T temp[elems];
-    // calculate locally
     for (int t = 0; t < elems; t++) {
       int a = start + t;
+      if (a >= N) {
+        break;
+      }
       temp[t] = scan_op(arr[a], arr[a - step_local]);
     }
     bar->wait();
     // commit results
     for (int t = 0; t < elems; t++) {
       int a = start + t;
+      if (a >= N) {
+        break;
+      }
       arr[a] = temp[t];
     }
-    // one thread increments step
     if (num == 0) {
       *step *= 2;
     }
@@ -82,7 +91,36 @@ void *pfx_scan_max_parallelism(void *args_) {
   return nullptr;
 }
 
+// https://commons.wikimedia.org/wiki/File:Prefix_sum_16.svg
 template <class T>
 void *pfx_scan_work_efficient(void *args_) {
+  auto args = (pfx_scan_parallel_args<T> *)args_;
+  int num = args->num;
+  barrier *bar = args->bar;
+  int *step = args->step;
+  T *arr = args->arr;
+  int N = args->N;
+  int threads = args->threads;
+  auto scan_op = args->scan_op;
+  int step_local;
+  // up sweep
+  while ((step_local = *step) <= N) {
+    int first = step_local - 1;
+    int elems = ((N - 1) - first) / step_local + 1;
+    elems = elems / threads + 1;
+    int start = first + num * elems * step_local;
+    for (int t = 0; t < elems; t++) {
+      int a = start + t * step_local;
+      if (a >= N) {
+        break;
+      }
+      arr[a] = scan_op(arr[a], arr[a - step_local / 2]);
+    }
+    bar->wait();
+    if (num == 0) {
+      *step *= 2;
+    }
+    bar->wait();
+  }
   return nullptr;
 }

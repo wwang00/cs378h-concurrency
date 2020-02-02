@@ -46,7 +46,6 @@ int main(int argc, char **argv) {
     }
     auto t1 = chrono::system_clock::now();
     cout << (t1 - t0) / chrono::microseconds(1) << endl;
-    // cout << "begin output" << endl;
     // write to output file
     for (int i = 0; i < N; i++) {
       for (int j = 0; j < dim; j++) {
@@ -68,7 +67,6 @@ int main(int argc, char **argv) {
     }
     auto t1 = chrono::system_clock::now();
     cout << (t1 - t0) / chrono::microseconds(1) << endl;
-    // cout << "begin output" << endl;
     // write to output file
     for (int i = 0; i < N; i++) {
       fout << arr[i].v << endl;
