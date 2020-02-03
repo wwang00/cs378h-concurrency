@@ -13,6 +13,7 @@ int main(int argc, char **argv) {
   int N;        // number of input data
   int dim;      // FP vector dimension
   int threads;  // parallelism
+  bool s;
   // parse args
   unordered_set<string> flags{"-s"};
   unordered_set<string> opts{"-n", "-i", "-o"};
@@ -22,6 +23,7 @@ int main(int argc, char **argv) {
     return -1;
   }
   threads = stoi(args["-n"]);
+  s = args.count("-s");
   ifstream fin(args["-i"]);
   ofstream fout(args["-o"]);
   // read input and do work
@@ -42,7 +44,7 @@ int main(int argc, char **argv) {
     if (threads == 0) {  // sequential
       pfx_scan_sequential<fp_vector>(arr, N, fp_vector::add);
     } else {  // parallel
-      pfx_scan_parallel<fp_vector>(arr, N, threads, fp_vector::add);
+      pfx_scan_parallel<fp_vector>(arr, N, threads, s, fp_vector::add);
     }
     auto t1 = chrono::system_clock::now();
     cout << (t1 - t0) / chrono::microseconds(1) << endl;
@@ -63,7 +65,7 @@ int main(int argc, char **argv) {
     if (threads == 0) {  // sequential
       pfx_scan_sequential<int_pad>(arr, N, int_pad::add);
     } else {  // parallel
-      pfx_scan_parallel<int_pad>(arr, N, threads, int_pad::add);
+      pfx_scan_parallel<int_pad>(arr, N, threads, s, int_pad::add);
     }
     auto t1 = chrono::system_clock::now();
     cout << (t1 - t0) / chrono::microseconds(1) << endl;
