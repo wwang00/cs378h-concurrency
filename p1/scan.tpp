@@ -42,8 +42,8 @@ void pfx_scan_parallel(T *arr, const int N, const int threads, const bool s,
     }
   }
   for (int t = 0; t < threads; t++) {
-    auto args = new (&args_list[t])
-      pfx_scan_parallel_args<T>(t, &pbar, &bar, &step, arr, N, threads, s, scan_op);
+    auto args = new (&args_list[t]) pfx_scan_parallel_args<T>(
+        t, &pbar, &bar, &step, arr, N, threads, s, scan_op);
     pthread_create(&tid[t], nullptr, worker, (void *)args);
   }
   for (int t = 0; t < threads; t++) {
@@ -79,7 +79,7 @@ void *pfx_scan_max_parallelism(void *args_) {
       }
       temp[t] = scan_op(arr[a], arr[a - step_local]);
     }
-    if(s) {
+    if (s) {
       bar->wait();
     } else {
       pthread_barrier_wait(pbar);
@@ -95,7 +95,7 @@ void *pfx_scan_max_parallelism(void *args_) {
     if (num == 0) {
       *step *= 2;
     }
-    if(s) {
+    if (s) {
       bar->wait();
     } else {
       pthread_barrier_wait(pbar);
@@ -131,7 +131,7 @@ void *pfx_scan_work_efficient(void *args_) {
       }
       arr[a] = scan_op(arr[a], arr[a - step_local / 2]);
     }
-    if(s) {
+    if (s) {
       bar->wait();
     } else {
       pthread_barrier_wait(pbar);
@@ -139,7 +139,7 @@ void *pfx_scan_work_efficient(void *args_) {
     if (num == 0) {
       *step *= 2;
     }
-    if(s) {
+    if (s) {
       bar->wait();
     } else {
       pthread_barrier_wait(pbar);

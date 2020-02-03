@@ -34,17 +34,17 @@ struct pfx_scan_parallel_args {
 
   pfx_scan_parallel_args() : num(-1), N(-1), threads(-1), s(false) {}
 
-  pfx_scan_parallel_args(const int num, pthread_barrier_t *pbar, barrier *bar, int *step, T *arr,
-                         const int N, const int threads, const bool s,
-                         T (*scan_op)(const T &, const T &))
+  pfx_scan_parallel_args(const int num, pthread_barrier_t *pbar, barrier *bar,
+                         int *step, T *arr, const int N, const int threads,
+                         const bool s, T (*scan_op)(const T &, const T &))
       : num(num),
-	pbar(pbar),
+        pbar(pbar),
         bar(bar),
         step(step),
         arr(arr),
         N(N),
         threads(threads),
-	s(s),
+        s(s),
         scan_op(scan_op) {}
 };
 

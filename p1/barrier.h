@@ -22,16 +22,14 @@ class barrier {
       return;
     }
     bool t = toggle;
-    while(t == toggle) {
+    while (t == toggle) {
       pthread_spin_unlock(&lock);
       pthread_spin_lock(&lock);
     }
     pthread_spin_unlock(&lock);
   }
-  
-  ~barrier() {
-    pthread_spin_destroy(&lock);
-  }
+
+  ~barrier() { pthread_spin_destroy(&lock); }
 };
 
 #endif

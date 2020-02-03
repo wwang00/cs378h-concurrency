@@ -16,7 +16,7 @@ argparse.o : argparse.h
 .PHONY : test
 test:
 	make
-	./pfxsum -n $(n) -i $(f).txt -o $(f).out
+	./pfxsum -s -n $(n) -i $(f).txt -o $(f).out
 
 .PHONY : clean
 clean :
