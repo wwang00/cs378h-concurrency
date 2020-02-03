@@ -7,7 +7,7 @@
 #include "barrier.h"
 #include "scan_types.h"
 
-#define PARALLEL_VAR 0
+#define PARALLEL_VAR 1
 
 template <class T>
 void pfx_scan_sequential(T *arr, const int N,
@@ -138,6 +138,67 @@ void *pfx_scan_work_efficient(void *args_) {
     }
     if (num == 0) {
       *step *= 2;
+    }
+    if (s) {
+      bar->wait();
+    } else {
+      pthread_barrier_wait(pbar);
+    }
+  }
+  if (s) {
+    bar->wait();
+  } else {
+    pthread_barrier_wait(pbar);
+  }
+  if (num == 0) {
+    if (step_local / 2 == N) {
+      *step /= 4;
+    } else {
+      *step /= 2;
+    }
+    std::cout << "new step " << *step << std::endl;
+  }
+  if (s) {
+    bar->wait();
+  } else {
+    pthread_barrier_wait(pbar);
+  }
+  // down sweep
+  while ((step_local = *step) >= 2) {
+    int first = (step_local / 2) * 3 - 1;
+    if (first >= N) {
+      if (s) {
+	bar->wait();
+      } else {
+	pthread_barrier_wait(pbar);
+      }
+      if (num == 0) {
+        *step /= 2;
+      }
+      if (s) {
+        bar->wait();
+      } else {
+        pthread_barrier_wait(pbar);
+      }
+      continue;
+    }
+    int elems = ((N - 1) - first) / step_local + 1;
+    elems = elems / threads + 1;
+    int start = first + num * elems * step_local;
+    for (int t = 0; t < elems; t++) {
+      int a = start + t * step_local;
+      if (a >= N) {
+        break;
+      }
+      arr[a] = scan_op(arr[a], arr[a - step_local / 2]);
+    }
+    if (s) {
+      bar->wait();
+    } else {
+      pthread_barrier_wait(pbar);
+    }
+    if (num == 0) {
+      *step /= 2;
     }
     if (s) {
       bar->wait();
