@@ -1,21 +1,20 @@
 import matplotlib.pyplot as plt
 
-ten = []
-hundred = []
-thousand = []
+int_10000_s = []
+int_10000 = []
 
-with open("10_10_floats_we.avg", "r") as fin:
-    ten = [int(x) for x in fin]
+with open("10000_ints_we_s.avg", "r") as fin:
+    int_10000_s = [int(x) for x in fin]
 
-with open("100_100_floats_we.avg", "r") as fin:
-    hundred = [int(x) for x in fin]
-
-with open("1000_1000_floats_we.avg", "r") as fin:
-    thousand = [int(x) for x in fin]
+with open("10000_ints_we.avg", "r") as fin:
+    int_10000 = [int(x) for x in fin]
 
 x = range(0, 34, 2)
 
-plt.plot(x, ten, '-ro', x, hundred, '-g^', x, thousand, '-bs')
 plt.xlabel('threads')
 plt.ylabel('microseconds')
+
+plt.plot(x, int_10000_s, '-ro', label="10000_ints_custom")
+plt.plot(x, int_10000, '-g^', label="10000_ints_pthread")
+plt.legend(loc="upper left")
 plt.show()
