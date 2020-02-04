@@ -47,7 +47,8 @@ int main(int argc, char **argv) {
       pfx_scan_parallel<fp_vector>(arr, N, threads, s, fp_vector::add);
     }
     auto t1 = chrono::system_clock::now();
-    cout << (t1 - t0) / chrono::microseconds(1) << endl;
+    float millis = (float)((t1 - t0) / chrono::milliseconds(1));
+    printf("$.4f", millis / 1000.0);
     // write to output file
     for (int j = 0; j < dim; j++) {
       fprintf(fout, "0.0000");
@@ -77,7 +78,8 @@ int main(int argc, char **argv) {
       pfx_scan_parallel<int_pad>(arr, N, threads, s, int_pad::add);
     }
     auto t1 = chrono::system_clock::now();
-    cout << (t1 - t0) / chrono::microseconds(1) << endl;
+    double millis = (double)((t1 - t0) / chrono::milliseconds(1));
+    printf("$.4f", millis / 1000);
     // write to output file
     fprintf(fout, "0");
     for (int i = 0; i < N - 1; i++) {
