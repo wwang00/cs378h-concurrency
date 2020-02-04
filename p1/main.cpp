@@ -47,21 +47,21 @@ int main(int argc, char **argv) {
       pfx_scan_parallel<fp_vector>(arr, N, threads, s, fp_vector::add);
     }
     auto t1 = chrono::system_clock::now();
-    cout << (t1 - t0) / chrono::milliseconds(1) << endl;
+    cout << (t1 - t0) / chrono::microseconds(1) << endl;
     // write to output file
-    for(int j = 0; j < dim; j++) {
+    for (int j = 0; j < dim; j++) {
       fprintf(fout, "0.0000");
-      if(j < dim - 1) {
-	fprintf(fout, ",");
+      if (j < dim - 1) {
+        fprintf(fout, ",");
       }
     }
     for (int i = 0; i < N - 1; i++) {
       fprintf(fout, "\n");
       for (int j = 0; j < dim; j++) {
-	fprintf(fout, "%.4f", arr[i].v[j]);
-	if(j < dim - 1) {
-	  fprintf(fout, ",");
-	}
+        fprintf(fout, "%.4f", arr[i].v[j]);
+        if (j < dim - 1) {
+          fprintf(fout, ",");
+        }
       }
     }
   } else {  // integer data
@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
       pfx_scan_parallel<int_pad>(arr, N, threads, s, int_pad::add);
     }
     auto t1 = chrono::system_clock::now();
-    cout << (t1 - t0) / chrono::milliseconds(1) << endl;
+    cout << (t1 - t0) / chrono::microseconds(1) << endl;
     // write to output file
     fprintf(fout, "0");
     for (int i = 0; i < N - 1; i++) {
