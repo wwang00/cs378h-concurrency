@@ -13,7 +13,7 @@ int main(int argc, char **argv) {
   int N;        // number of input data
   int dim;      // FP vector dimension
   int threads;  // parallelism
-  bool s;
+  bool s;       // custom barrier
   // parse args
   unordered_set<string> flags{"-s"};
   unordered_set<string> opts{"-n", "-i", "-o"};
@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
   threads = stoi(args["-n"]);
   s = args.count("-s");
   ifstream fin(args["-i"]);
-  ofstream fout(args["-o"]);
+  auto fout = fopen(args["-o"].c_str(), "w");
   // read input and do work
   fin >> dim >> N;
   if (dim > 0) {  // FP vector data
@@ -47,13 +47,22 @@ int main(int argc, char **argv) {
       pfx_scan_parallel<fp_vector>(arr, N, threads, s, fp_vector::add);
     }
     auto t1 = chrono::system_clock::now();
-    cout << (t1 - t0) / chrono::microseconds(1) << endl;
+    cout << (t1 - t0) / chrono::milliseconds(1) << endl;
     // write to output file
-    for (int i = 0; i < N; i++) {
-      for (int j = 0; j < dim; j++) {
-        fout << arr[i].v[j] << (j == dim - 1 ? "" : ",");
+    for(int j = 0; j < dim; j++) {
+      fprintf(fout, "0.0000");
+      if(j < dim - 1) {
+	fprintf(fout, ",");
       }
-      fout << endl;
+    }
+    for (int i = 0; i < N - 1; i++) {
+      fprintf(fout, "\n");
+      for (int j = 0; j < dim; j++) {
+	fprintf(fout, "%.4f", arr[i].v[j]);
+	if(j < dim - 1) {
+	  fprintf(fout, ",");
+	}
+      }
     }
   } else {  // integer data
     int_pad *arr = (int_pad *)malloc(N * sizeof(int_pad));
@@ -68,13 +77,14 @@ int main(int argc, char **argv) {
       pfx_scan_parallel<int_pad>(arr, N, threads, s, int_pad::add);
     }
     auto t1 = chrono::system_clock::now();
-    cout << (t1 - t0) / chrono::microseconds(1) << endl;
+    cout << (t1 - t0) / chrono::milliseconds(1) << endl;
     // write to output file
-    for (int i = 0; i < N; i++) {
-      fout << arr[i].v << endl;
+    fprintf(fout, "0");
+    for (int i = 0; i < N - 1; i++) {
+      fprintf(fout, "\n%d", arr[i].v);
     }
   }
   fin.close();
-  fout.close();
+  fclose(fout);
   return 0;
 }
