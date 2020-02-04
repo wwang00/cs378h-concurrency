@@ -48,7 +48,7 @@ int main(int argc, char **argv) {
     }
     auto t1 = chrono::system_clock::now();
     float millis = (float)((t1 - t0) / chrono::milliseconds(1));
-    printf("$.4f", millis / 1000.0);
+    printf("%.4f", millis / 1000.0);
     // write to output file
     for (int j = 0; j < dim; j++) {
       fprintf(fout, "0.0000");
@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
     }
     auto t1 = chrono::system_clock::now();
     double millis = (double)((t1 - t0) / chrono::milliseconds(1));
-    printf("$.4f", millis / 1000);
+    printf("%.4f", millis / 1000);
     // write to output file
     fprintf(fout, "0");
     for (int i = 0; i < N - 1; i++) {
