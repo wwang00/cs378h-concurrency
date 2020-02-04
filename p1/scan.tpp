@@ -27,23 +27,20 @@ void pfx_scan_parallel(T *arr, const int N, const int threads, const bool s,
   pthread_barrier_t pbar;
   pthread_barrier_init(&pbar, nullptr, threads);
   barrier bar(threads);
-  int step;
   void *(*worker)(void *);
   switch (PARALLEL_VAR) {
     case 1: {
-      step = 2;
       worker = pfx_scan_work_efficient<T>;
       break;
     }
     default: {
-      step = 1;
       worker = pfx_scan_max_parallelism<T>;
       break;
     }
   }
   for (int t = 0; t < threads; t++) {
-    auto args = new (&args_list[t]) pfx_scan_parallel_args<T>(
-        t, &pbar, &bar, &step, arr, N, threads, s, scan_op);
+    auto args = new (&args_list[t])
+        pfx_scan_parallel_args<T>(t, &pbar, &bar, arr, N, threads, s, scan_op);
     pthread_create(&tid[t], nullptr, worker, (void *)args);
   }
   for (int t = 0; t < threads; t++) {
@@ -59,17 +56,16 @@ void *pfx_scan_max_parallelism(void *args_) {
   int num = args->num;
   pthread_barrier_t *pbar = args->pbar;
   barrier *bar = args->bar;
-  int *step = args->step;
   T *arr = args->arr;
   int N = args->N;
   int threads = args->threads;
   bool s = args->s;
   auto scan_op = args->scan_op;
-  int step_local;
-  while ((step_local = *step) <= N) {
-    int elems = N - step_local;
+  int step = 1;
+  while (step <= N) {
+    int elems = N - step;
     elems = elems / threads + 1;
-    int start = step_local + num * elems;
+    int start = step + num * elems;
     // compute locally
     T temp[elems];
     for (int t = 0; t < elems; t++) {
@@ -77,7 +73,7 @@ void *pfx_scan_max_parallelism(void *args_) {
       if (a >= N) {
         break;
       }
-      temp[t] = scan_op(arr[a], arr[a - step_local]);
+      temp[t] = scan_op(arr[a], arr[a - step]);
     }
     if (s) {
       bar->wait();
@@ -92,9 +88,7 @@ void *pfx_scan_max_parallelism(void *args_) {
       }
       arr[a] = temp[t];
     }
-    if (num == 0) {
-      *step *= 2;
-    }
+    step *= 2;
     if (s) {
       bar->wait();
     } else {
@@ -111,95 +105,55 @@ void *pfx_scan_work_efficient(void *args_) {
   int num = args->num;
   pthread_barrier_t *pbar = args->pbar;
   barrier *bar = args->bar;
-  int *step = args->step;
   T *arr = args->arr;
   int N = args->N;
   int threads = args->threads;
   bool s = args->s;
   auto scan_op = args->scan_op;
-  int step_local;
+  int step = 2;
   // up sweep
-  while ((step_local = *step) <= N) {
-    int first = step_local - 1;
-    int elems = ((N - 1) - first) / step_local + 1;
+  while (step <= N) {
+    int first = step - 1;
+    int elems = ((N - 1) - first) / step + 1;
     elems = elems / threads + 1;
-    int start = first + num * elems * step_local;
+    int start = first + num * elems * step;
     for (int t = 0; t < elems; t++) {
-      int a = start + t * step_local;
+      int a = start + t * step;
       if (a >= N) {
         break;
       }
-      arr[a] = scan_op(arr[a], arr[a - step_local / 2]);
+      arr[a] = scan_op(arr[a], arr[a - step / 2]);
     }
-    if (s) {
-      bar->wait();
-    } else {
-      pthread_barrier_wait(pbar);
-    }
-    if (num == 0) {
-      *step *= 2;
-    }
+    step *= 2;
     if (s) {
       bar->wait();
     } else {
       pthread_barrier_wait(pbar);
     }
   }
-  if (s) {
-    bar->wait();
+  if (step / 2 == N) {
+    step /= 4;
   } else {
-    pthread_barrier_wait(pbar);
-  }
-  if (num == 0) {
-    if (step_local / 2 == N) {
-      *step /= 4;
-    } else {
-      *step /= 2;
-    }
-    std::cout << "new step " << *step << std::endl;
-  }
-  if (s) {
-    bar->wait();
-  } else {
-    pthread_barrier_wait(pbar);
+    step /= 2;
   }
   // down sweep
-  while ((step_local = *step) >= 2) {
-    int first = (step_local / 2) * 3 - 1;
+  while (step >= 2) {
+    int first = (step / 2) * 3 - 1;
     if (first >= N) {
-      if (s) {
-	bar->wait();
-      } else {
-	pthread_barrier_wait(pbar);
-      }
-      if (num == 0) {
-        *step /= 2;
-      }
-      if (s) {
-        bar->wait();
-      } else {
-        pthread_barrier_wait(pbar);
-      }
+      step /= 2;
       continue;
     }
-    int elems = ((N - 1) - first) / step_local + 1;
+    int elems = ((N - 1) - first) / step + 1;
     elems = elems / threads + 1;
-    int start = first + num * elems * step_local;
+    int start = first + num * elems * step;
     for (int t = 0; t < elems; t++) {
-      int a = start + t * step_local;
+      int a = start + t * step;
       if (a >= N) {
         break;
       }
-      arr[a] = scan_op(arr[a], arr[a - step_local / 2]);
+      arr[a] = scan_op(arr[a], arr[a - step / 2]);
     }
-    if (s) {
-      bar->wait();
-    } else {
-      pthread_barrier_wait(pbar);
-    }
-    if (num == 0) {
-      *step /= 2;
-    }
+    step /= 2;
     if (s) {
       bar->wait();
     } else {
