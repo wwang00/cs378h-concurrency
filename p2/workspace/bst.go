@@ -11,7 +11,6 @@ type BST struct {
 	Root *Node
 }
 
-// insert a value v not already in t
 func (t *BST) insert(v int) {
 	if t.Root == nil {
 		t.Root = &Node{v, nil, nil}
@@ -37,7 +36,7 @@ func (t *BST) insert(v int) {
 	}
 }
 
-func (t *BST) hash() uint64 {
+func hash(t *BST) uint64 {
 	var hash uint64 = 1
 	var stack Stack
 	curr := t.Root
@@ -53,4 +52,41 @@ func (t *BST) hash() uint64 {
 		}
 	}
 	return hash
+}
+
+func equals(a, b *BST) bool {
+	var stackA Stack
+	var stackB Stack
+	currA := a.Root
+	currB := b.Root
+	var lastA *Node = nil
+	var lastB *Node = nil
+	for (currA != nil || stackA.Size > 0) || (currB != nil || stackB.Size > 0) {
+		if lastA == nil {
+			if currA == nil {
+				lastA = stackA.pop()
+				currA = lastA.R
+			} else {
+				stackA.push(currA)
+				currA = currA.L
+			}
+		}
+		if lastB == nil {
+			if currB == nil {
+				lastB = stackB.pop()
+				currB = lastB.R
+			} else {
+				stackB.push(currB)
+				currB = currB.L
+			}
+		}
+		if lastA != nil && lastB != nil {
+			if lastA.V != lastB.V {
+				return false
+			}
+			lastA = nil
+			lastB = nil
+		}
+	}
+	return true
 }
