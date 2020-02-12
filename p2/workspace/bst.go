@@ -25,12 +25,14 @@ func (t *BST) insert(v int) {
 				return
 			}
 			curr = curr.L
-		} else {
+		} else if v > curr.V {
 			if curr.R == nil {
 				curr.R = &Node{v, nil, nil}
 				return
 			}
 			curr = curr.R
+		} else {
+			return
 		}
 	}
 }
