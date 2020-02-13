@@ -15,7 +15,8 @@ func main() {
 	var trees []BST
 	var hashes []uint64
 	var treesByHash map[uint64][]int
-	var treeGroups [][]bool
+	var treesEqual [][]bool
+	var treeGroups [][]int
 	// parse args
 	// hashWorkers := flag.Int("hash-workers", 0, "num threads calculating hash")
 	// dataWorkers := flag.Int("data-workers", 0, "num threads modifying hash map")
@@ -71,9 +72,13 @@ func main() {
 	}
 
 	// compare within groups
-	treeGroups = make([][]bool, N)
+	treesEqual = make([][]bool, N)
+	for i := range treesEqual {
+		treesEqual[i] = make([]bool, N)
+	}
+	treeGroups = make([][]int, 0)
 	for i := range treeGroups {
-		treeGroups[i] = make([]bool, N)
+		treeGroups[i] = make([]int, 0)
 	}
 
 	startCompareTime := time.Now()
@@ -85,18 +90,16 @@ func main() {
 				id2 := ids[j]
 				if equals(&trees[id1], &trees[id2]) {
 					if id1 < id2 {
-						treeGroups[id1][id2] = true
+						treesEqual[id1][id2] = true
 					} else {
-						treeGroups[id2][id1] = true
+						treesEqual[id2][id1] = true
 					}
 				}
 			}
 		}
 	}
 
-	fmt.Printf("compareTreeTime: %d\n", time.Since(startCompareTime).Microseconds())
-
-	group := 0
+	groupCount := 0
 	seen := make([]bool, N)
 	for i := 0; i < N-1; i++ {
 		if seen[i] {
@@ -104,19 +107,26 @@ func main() {
 		}
 		found := false
 		for j := i + 1; j < N; j++ {
-			if treeGroups[i][j] {
+			if treesEqual[i][j] {
 				if !found {
 					found = true
 					seen[i] = true
-					fmt.Printf("group %d: %d", group, i)
-					group++
+					treeGroups[groupCount] = append(treeGroups[groupCount], i)
+					groupCount++
 				}
 				seen[j] = true
-				fmt.Printf(" %d", j)
+				treeGroups[groupCount] = append(treeGroups[groupCount], j)
 			}
 		}
-		if found {
-			fmt.Println()
+	}
+
+	fmt.Printf("compareTreeTime: %d\n", time.Since(startCompareTime).Microseconds())
+
+	for i, group := range treeGroups {
+		fmt.Printf("group %d:", i)
+		for _, id := range group {
+			fmt.Printf(" %d", id)
 		}
+		fmt.Println()
 	}
 }
