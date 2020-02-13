@@ -19,7 +19,6 @@ var treesByHash map[uint64][]int
 var treesEqual [][]bool
 
 func main() {
-	N = 0
 	// parse args
 	hashWorkersFlag := flag.Int("hash-workers", 0, "num threads calculating hash")
 	dataWorkersFlag := flag.Int("data-workers", 0, "num threads modifying hash map")
@@ -46,50 +45,68 @@ func main() {
 		N++
 	}
 
-	// compute hashes
+	// init data structures
 	hashes = make([]uint64, N)
+	treesByHash = make(map[uint64][]int)
+	treesEqual = make([][]bool, N)
+	for i := range treesEqual {
+		treesEqual[i] = make([]bool, N)
+	}
 
+	// compute hashes
 	startHashTime := time.Now()
 
-	if hashWorkers > 1 {
+	if hashWorkers == 1 {
+		if dataWorkers == 0 {
+			computeHashes()
+
+			fmt.Printf("hashTime: %d\n", time.Since(startHashTime).Microseconds())
+			return
+		}
+		processHashesSequential()
+	} else {
 		items := N / hashWorkers
 		if items*hashWorkers != N {
 			items++
 		}
 		var wg sync.WaitGroup
-		for t := 0; t < hashWorkers; t++ {
-			start := t * items
-			if start >= N {
-				continue
+		if dataWorkers == 1 {
+			mapCh := make(chan *HashPair)
+			go insertHashes(mapCh)
+			for t := 0; t < hashWorkers; t++ {
+				start := t * items // TODO move into goroutine
+				if start >= N {
+					continue
+				}
+				end := start + items
+				if end > N {
+					end = N
+				}
+				wg.Add(1)
+				go processHashesParallelChan(start, end, mapCh, &wg)
+				wg.Wait()
 			}
-			end := start + items
-			if end > N {
-				end = N
+		} else if dataWorkers == hashWorkers {
+			var mutex sync.Mutex
+			for t := 0; t < hashWorkers; t++ {
+				start := t * items
+				if start >= N {
+					continue
+				}
+				end := start + items
+				if end > N {
+					end = N
+				}
+				wg.Add(1)
+				go processHashesParallelLock(start, end, &mutex, &wg)
+				wg.Wait()
 			}
-			wg.Add(1)
-			go computeHashes(start, end, &wg)
-			wg.Wait()
+		} else {
+
 		}
-	} else {
-		computeHashes(0, N, nil)
 	}
 
-	fmt.Printf("hashTime: %d\n", time.Since(startHashTime).Microseconds())
-
-	// make hash groups
-	treesByHash = make(map[uint64][]int)
-
-	startGroupTime := time.Now()
-
-	if dataWorkers > 1 {
-
-	} else {
-		for i, hash := range hashes {
-			treesByHash[hash] = append(treesByHash[hash], i)
-		}
-	}
-
-	fmt.Printf("hashGroupTime: %d\n", time.Since(startGroupTime).Microseconds())
+	fmt.Printf("hashGroupTime: %d\n", time.Since(startHashTime).Microseconds())
 
 	for hash, ids := range treesByHash {
 		fmt.Printf("%d:", hash)
@@ -100,14 +117,11 @@ func main() {
 	}
 
 	// compare within groups
-	treesEqual = make([][]bool, N)
-	for i := range treesEqual {
-		treesEqual[i] = make([]bool, N)
-	}
-
 	startCompareTime := time.Now()
 
-	if compWorkers > 1 {
+	if compWorkers == 0 {
+		return
+	} else if compWorkers > 1 {
 
 	} else {
 		for _, ids := range treesByHash {
