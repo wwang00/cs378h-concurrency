@@ -17,17 +17,33 @@ func processHashesSequential() {
 	}
 }
 
-func processHashesParallelChan(start int, end int, mapCh chan<- *HashPair, wg *sync.WaitGroup) {
+func processHashesParallelChan(t int, mapCh chan<- *HashPair, wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	start := t * items
+	if start >= N {
+		return
+	}
+	end := start + items
+	if end > N {
+		end = N
+	}
 	for i := start; i < end; i++ {
 		mapCh <- &HashPair{hash(&trees[i]), i}
 	}
 }
 
-func processHashesParallelLock(start int, end int, mutex *sync.Mutex, wg *sync.WaitGroup) {
+func processHashesParallelLock(t int, mutex *sync.Mutex, wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	start := t * items
+	if start >= N {
+		return
+	}
+	end := start + items
+	if end > N {
+		end = N
+	}
 	for i := start; i < end; i++ {
 		h := hash(&trees[i])
 		mutex.Lock()

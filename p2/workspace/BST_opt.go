@@ -13,6 +13,7 @@ import (
 
 // N : number of trees
 var N int
+var items int
 var trees []BST
 var hashes []uint64
 var treesByHash map[uint64][]int
@@ -59,13 +60,12 @@ func main() {
 	if hashWorkers == 1 {
 		if dataWorkers == 0 {
 			computeHashes()
-
 			fmt.Printf("hashTime: %d\n", time.Since(startHashTime).Microseconds())
 			return
 		}
 		processHashesSequential()
 	} else {
-		items := N / hashWorkers
+		items = N / hashWorkers
 		if items*hashWorkers != N {
 			items++
 		}
@@ -74,31 +74,15 @@ func main() {
 			mapCh := make(chan *HashPair)
 			go insertHashes(mapCh)
 			for t := 0; t < hashWorkers; t++ {
-				start := t * items // TODO move into goroutine
-				if start >= N {
-					continue
-				}
-				end := start + items
-				if end > N {
-					end = N
-				}
 				wg.Add(1)
-				go processHashesParallelChan(start, end, mapCh, &wg)
+				go processHashesParallelChan(t, mapCh, &wg)
 				wg.Wait()
 			}
 		} else if dataWorkers == hashWorkers {
 			var mutex sync.Mutex
 			for t := 0; t < hashWorkers; t++ {
-				start := t * items
-				if start >= N {
-					continue
-				}
-				end := start + items
-				if end > N {
-					end = N
-				}
 				wg.Add(1)
-				go processHashesParallelLock(start, end, &mutex, &wg)
+				go processHashesParallelLock(t, &mutex, &wg)
 				wg.Wait()
 			}
 		} else {
