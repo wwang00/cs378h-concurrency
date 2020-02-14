@@ -13,11 +13,13 @@ func computeHashes() {
 func processHashesSequential() {
 	for i, tree := range trees {
 		h := hash(&tree)
-		treesByHash[h] = append(treesByHash[h], i)
+		arr := treesByHash.Maps[0][h]
+		arr = append(arr, i)
+		treesByHash.Maps[0][h] = arr
 	}
 }
 
-func processHashesParallelChan(t int, mapCh chan<- *HashPair, wg *sync.WaitGroup) {
+func processHashesParallelChan(t int, mapCh []chan *HashPair, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	start := t * items
@@ -29,7 +31,8 @@ func processHashesParallelChan(t int, mapCh chan<- *HashPair, wg *sync.WaitGroup
 		end = N
 	}
 	for i := start; i < end; i++ {
-		mapCh <- &HashPair{hash(&trees[i]), i}
+		h := hash(&trees[i])
+		mapCh[h%uint64(dataWorkers)] <- &HashPair{h, i}
 	}
 }
 
@@ -46,20 +49,28 @@ func processHashesParallelLock(t int, mutex *sync.Mutex, wg *sync.WaitGroup) {
 	}
 	for i := start; i < end; i++ {
 		h := hash(&trees[i])
+		bucket := h % uint64(dataWorkers)
 		mutex.Lock()
-		treesByHash[h] = append(treesByHash[h], i)
+		arr := treesByHash.Maps[bucket][h]
+		arr = append(arr, i)
+		treesByHash.Maps[bucket][h] = arr
 		mutex.Unlock()
 	}
 }
 
-func insertHashes(mapCh <-chan *HashPair) {
+func insertHashes(mapCh chan *HashPair, t int) {
 	var hp *HashPair
 	for {
 		hp = <-mapCh
 		if hp == nil {
 			return
 		}
-		hash := hp.K
-		treesByHash[hash] = append(treesByHash[hash], hp.V)
+		h := hp.K
+		if h%uint64(dataWorkers) != uint64(t) {
+			panic("data worker hash bucket mismatch")
+		}
+		arr := treesByHash.Maps[t][h]
+		arr = append(arr, hp.V)
+		treesByHash.Maps[t][h] = arr
 	}
 }

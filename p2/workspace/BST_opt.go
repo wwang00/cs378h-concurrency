@@ -16,8 +16,12 @@ var N int
 var items int
 var trees []BST
 var hashes []uint64
-var treesByHash map[uint64][]int
+var treesByHash BucketMap
 var treesEqual [][]bool
+
+var hashWorkers int
+var dataWorkers int
+var compWorkers int
 
 func main() {
 	// parse args
@@ -26,9 +30,9 @@ func main() {
 	compWorkersFlag := flag.Int("comp-workers", 0, "num threads comparing trees")
 	fin := flag.String("input", "", "input file")
 	flag.Parse()
-	hashWorkers := *hashWorkersFlag
-	dataWorkers := *dataWorkersFlag
-	compWorkers := *compWorkersFlag
+	hashWorkers = *hashWorkersFlag
+	dataWorkers = *dataWorkersFlag
+	compWorkers = *compWorkersFlag
 
 	// read input and build trees
 	file, _ := os.Open(*fin)
@@ -48,7 +52,7 @@ func main() {
 
 	// init data structures
 	hashes = make([]uint64, N)
-	treesByHash = make(map[uint64][]int)
+	treesByHash.init(dataWorkers)
 	treesEqual = make([][]bool, N)
 	for i := range treesEqual {
 		treesEqual[i] = make([]bool, N)
@@ -71,13 +75,16 @@ func main() {
 		}
 		var wg sync.WaitGroup
 		if dataWorkers == 1 {
+			mapChs := make([]chan *HashPair, 1)
 			mapCh := make(chan *HashPair)
-			go insertHashes(mapCh)
+			mapChs[0] = mapCh
+			go insertHashes(mapCh, 0)
 			for t := 0; t < hashWorkers; t++ {
 				wg.Add(1)
-				go processHashesParallelChan(t, mapCh, &wg)
+				go processHashesParallelChan(t, mapChs, &wg)
 				wg.Wait()
 			}
+			mapCh <- nil
 		} else if dataWorkers == hashWorkers {
 			var mutex sync.Mutex
 			for t := 0; t < hashWorkers; t++ {
@@ -86,18 +93,33 @@ func main() {
 				wg.Wait()
 			}
 		} else {
-
+			mapChs := make([]chan *HashPair, dataWorkers)
+			for t := 0; t < dataWorkers; t++ {
+				mapCh := make(chan *HashPair)
+				mapChs[t] = mapCh
+				go insertHashes(mapCh, t)
+			}
+			for t := 0; t < hashWorkers; t++ {
+				wg.Add(1)
+				go processHashesParallelChan(t, mapChs, &wg)
+				wg.Wait()
+			}
+			for t := 0; t < dataWorkers; t++ {
+				mapChs[t] <- nil
+			}
 		}
 	}
 
 	fmt.Printf("hashGroupTime: %d\n", time.Since(startHashTime).Microseconds())
 
-	for hash, ids := range treesByHash {
-		fmt.Printf("%d:", hash)
-		for _, id := range ids {
-			fmt.Printf(" %d", id)
+	for _, bucket := range treesByHash.Maps {
+		for hash, ids := range bucket {
+			fmt.Printf("%d:", hash)
+			for _, id := range ids {
+				fmt.Printf(" %d", id)
+			}
+			fmt.Println()
 		}
-		fmt.Println()
 	}
 
 	// compare within groups
@@ -108,14 +130,16 @@ func main() {
 	} else if compWorkers > 1 {
 
 	} else {
-		for _, ids := range treesByHash {
-			for i := 0; i < len(ids)-1; i++ {
-				for j := i + 1; j < len(ids); j++ {
-					id1 := ids[i]
-					id2 := ids[j]
-					if equals(&trees[id1], &trees[id2]) {
-						treesEqual[id1][id2] = true
-						treesEqual[id2][id1] = true
+		for _, bucket := range treesByHash.Maps {
+			for _, ids := range bucket {
+				for i := 0; i < len(ids)-1; i++ {
+					for j := i + 1; j < len(ids); j++ {
+						id1 := ids[i]
+						id2 := ids[j]
+						if equals(&trees[id1], &trees[id2]) {
+							treesEqual[id1][id2] = true
+							treesEqual[id2][id1] = true
+						}
 					}
 				}
 			}
