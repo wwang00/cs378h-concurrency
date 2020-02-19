@@ -94,6 +94,7 @@ func main() {
 				go processHashesParallelChan(t, mapChs, &wg)
 			}
 			wg.Wait()
+			// tell workers to stop
 			for t := 0; t < dataWorkers; t++ {
 				mapChs[t] <- nil
 			}
@@ -127,7 +128,20 @@ func main() {
 			go compareTreesParallel(&workBuf, &wg)
 		}
 		// send work
-		// send nils
+		for _, bucket := range treesByHash.Maps {
+			for _, ids := range bucket {
+				for i := 0; i < len(ids)-1; i++ {
+					for j := i + 1; j < len(ids); j++ {
+						tp := &TreePair{ids[i], ids[j]}
+						workBuf.push(tp)
+					}
+				}
+			}
+		}
+		// tell workers to stop
+		for i := 0; i < compWorkers; i++ {
+			workBuf.push(nil)
+		}
 		wg.Wait()
 	} else {
 		for _, bucket := range treesByHash.Maps {
@@ -148,6 +162,7 @@ func main() {
 
 	fmt.Printf("compareTreeTime: %d\n", time.Since(startCompareTime).Microseconds())
 
+	// print groups
 	group := 0
 	seen := make([]bool, N)
 	for i := 0; i < N-1; i++ {

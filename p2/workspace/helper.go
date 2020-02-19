@@ -61,10 +61,60 @@ func processHashesParallelLock(t int, wg *sync.WaitGroup) {
 func compareTreesParallel(workBuf *BoundedBuffer, wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	var compareWg sync.WaitGroup
 	for {
 		tp := workBuf.pop()
 		if tp == nil {
 			return
+		}
+		valCh := make(chan *int)
+		compareWg.Add(1)
+		go compareTwoTrees(tp, true, valCh, &compareWg)
+		compareWg.Add(1)
+		go compareTwoTrees(tp, false, valCh, &compareWg)
+		compareWg.Wait()
+	}
+}
+
+func compareTwoTrees(tp *TreePair, sendFirst bool, valCh chan *int, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	var stack Stack
+	var other *int
+	var curr *Node
+	if sendFirst {
+		curr = trees[tp.A].Root
+	} else {
+		curr = trees[tp.B].Root
+	}
+	for curr != nil || stack.Size > 0 {
+		if curr == nil {
+			curr = stack.pop()
+			if sendFirst {
+				valCh <- &curr.V
+				other = <-valCh
+			} else {
+				other = <-valCh
+				valCh <- &curr.V
+			}
+			if other == nil || *other != curr.V {
+				return
+			}
+			curr = curr.R
+		} else {
+			stack.push(curr)
+			curr = curr.L
+		}
+	}
+	if sendFirst {
+		valCh <- nil
+		other = <-valCh
+	} else {
+		other = <-valCh
+		valCh <- nil
+		if other == nil {
+			treesEqual[tp.A][tp.B] = true
+			treesEqual[tp.B][tp.A] = true
 		}
 	}
 }
