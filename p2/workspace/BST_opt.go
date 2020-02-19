@@ -41,7 +41,7 @@ func main() {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.Split(scanner.Text(), " ")
-		tree := BST{nil}
+		var tree BST
 		for _, elem := range line {
 			val, _ := strconv.Atoi(elem)
 			tree.insert(val)
@@ -74,39 +74,30 @@ func main() {
 			items++
 		}
 		var wg sync.WaitGroup
-		if dataWorkers == 1 {
-			mapChs := make([]chan *HashPair, 1)
-			mapCh := make(chan *HashPair)
-			mapChs[0] = mapCh
-			go insertHashes(mapCh, 0)
+		if dataWorkers == hashWorkers {
 			for t := 0; t < hashWorkers; t++ {
 				wg.Add(1)
-				go processHashesParallelChan(t, mapChs, &wg)
-				wg.Wait()
+				go processHashesParallelLock(t, &wg)
 			}
-			mapCh <- nil
-		} else if dataWorkers == hashWorkers {
-			var mutex sync.Mutex
-			for t := 0; t < hashWorkers; t++ {
-				wg.Add(1)
-				go processHashesParallelLock(t, &mutex, &wg)
-				wg.Wait()
-			}
+			wg.Wait()
 		} else {
+			var insertWg sync.WaitGroup
 			mapChs := make([]chan *HashPair, dataWorkers)
 			for t := 0; t < dataWorkers; t++ {
 				mapCh := make(chan *HashPair)
 				mapChs[t] = mapCh
-				go insertHashes(mapCh, t)
+				insertWg.Add(1)
+				go insertHashes(mapCh, t, &insertWg)
 			}
 			for t := 0; t < hashWorkers; t++ {
 				wg.Add(1)
 				go processHashesParallelChan(t, mapChs, &wg)
-				wg.Wait()
 			}
+			wg.Wait()
 			for t := 0; t < dataWorkers; t++ {
 				mapChs[t] <- nil
 			}
+			insertWg.Wait()
 		}
 	}
 
@@ -128,7 +119,16 @@ func main() {
 	if compWorkers == 0 {
 		return
 	} else if compWorkers > 1 {
-
+		var wg sync.WaitGroup
+		var workBuf BoundedBuffer
+		workBuf.init(compWorkers)
+		for i := 0; i < compWorkers; i++ {
+			wg.Add(1)
+			go compareTreesParallel(&workBuf, &wg)
+		}
+		// send work
+		// send nils
+		wg.Wait()
 	} else {
 		for _, bucket := range treesByHash.Maps {
 			for _, ids := range bucket {

@@ -36,7 +36,7 @@ func processHashesParallelChan(t int, mapCh []chan *HashPair, wg *sync.WaitGroup
 	}
 }
 
-func processHashesParallelLock(t int, mutex *sync.Mutex, wg *sync.WaitGroup) {
+func processHashesParallelLock(t int, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	start := t * items
@@ -50,18 +50,30 @@ func processHashesParallelLock(t int, mutex *sync.Mutex, wg *sync.WaitGroup) {
 	for i := start; i < end; i++ {
 		h := hash(&trees[i])
 		bucket := h % uint64(dataWorkers)
-		mutex.Lock()
+		treesByHash.Mutex.Lock()
 		arr := treesByHash.Maps[bucket][h]
 		arr = append(arr, i)
 		treesByHash.Maps[bucket][h] = arr
-		mutex.Unlock()
+		treesByHash.Mutex.Unlock()
 	}
 }
 
-func insertHashes(mapCh chan *HashPair, t int) {
-	var hp *HashPair
+func compareTreesParallel(workBuf *BoundedBuffer, wg *sync.WaitGroup) {
+	defer wg.Done()
+
 	for {
-		hp = <-mapCh
+		tp := workBuf.pop()
+		if tp == nil {
+			return
+		}
+	}
+}
+
+func insertHashes(mapCh chan *HashPair, t int, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	for {
+		hp := <-mapCh
 		if hp == nil {
 			return
 		}

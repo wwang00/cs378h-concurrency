@@ -1,8 +1,11 @@
 package main
 
-// BucketMap : list of map[uint64][]int
+import "sync"
+
+// BucketMap : list of map from tree hash to list of tree ID
 type BucketMap struct {
-	Maps []map[uint64][]int
+	Mutex sync.Mutex
+	Maps  []map[uint64][]int
 }
 
 func (bm *BucketMap) init(b int) {
