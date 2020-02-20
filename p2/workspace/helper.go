@@ -4,9 +4,25 @@ import (
 	"sync"
 )
 
-func computeHashes() {
+func computeHashesSequential() {
 	for i, tree := range trees {
 		hashes[i] = hash(&tree)
+	}
+}
+
+func computeHashesParallel(t int, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	start := t * items
+	if start >= N {
+		return
+	}
+	end := start + items
+	if end > N {
+		end = N
+	}
+	for i := start; i < end; i++ {
+		hashes[i] = hash(&trees[i])
 	}
 }
 
@@ -128,9 +144,6 @@ func insertHashes(mapCh chan *HashPair, t int, wg *sync.WaitGroup) {
 			return
 		}
 		h := hp.K
-		if h%uint64(dataWorkers) != uint64(t) {
-			panic("data worker hash bucket mismatch")
-		}
 		arr := treesByHash.Maps[t][h]
 		arr = append(arr, hp.V)
 		treesByHash.Maps[t][h] = arr

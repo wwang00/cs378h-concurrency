@@ -23,16 +23,20 @@ var hashWorkers int
 var dataWorkers int
 var compWorkers int
 
+var printData bool
+
 func main() {
 	// parse args
 	hashWorkersFlag := flag.Int("hash-workers", 0, "num threads calculating hash")
 	dataWorkersFlag := flag.Int("data-workers", 0, "num threads modifying hash map")
 	compWorkersFlag := flag.Int("comp-workers", 0, "num threads comparing trees")
 	fin := flag.String("input", "", "input file")
+	dataFlag := flag.Bool("d", false, "print info for data collection")
 	flag.Parse()
 	hashWorkers = *hashWorkersFlag
 	dataWorkers = *dataWorkersFlag
 	compWorkers = *compWorkersFlag
+	printData = *dataFlag
 
 	// read input and build trees
 	file, _ := os.Open(*fin)
@@ -58,15 +62,34 @@ func main() {
 		treesEqual[i] = make([]bool, N)
 	}
 
-	// compute hashes
 	startHashTime := time.Now()
 
-	if hashWorkers == 1 {
-		if dataWorkers == 0 {
-			computeHashes()
-			fmt.Printf("hashTime: %d\n", time.Since(startHashTime).Microseconds())
-			return
+	// compute hashes only
+	if dataWorkers == 0 {
+		if hashWorkers == 1 {
+			computeHashesSequential()
+		} else {
+			items = N / hashWorkers
+			if items*hashWorkers != N {
+				items++
+			}
+			var wg sync.WaitGroup
+			for t := 0; t < hashWorkers; t++ {
+				wg.Add(1)
+				go computeHashesParallel(t, &wg)
+			}
+			wg.Wait()
 		}
+		if printData {
+			fmt.Println(time.Since(startHashTime).Microseconds())
+		} else {
+			fmt.Printf("hashTime: %d\n", time.Since(startHashTime).Microseconds())
+		}
+		return
+	}
+
+	// group hashes
+	if hashWorkers == 1 {
 		processHashesSequential()
 	} else {
 		items = N / hashWorkers
@@ -94,7 +117,7 @@ func main() {
 				go processHashesParallelChan(t, mapChs, &wg)
 			}
 			wg.Wait()
-			// tell workers to stop
+			// tell inserters to stop
 			for t := 0; t < dataWorkers; t++ {
 				mapChs[t] <- nil
 			}
@@ -102,24 +125,45 @@ func main() {
 		}
 	}
 
-	fmt.Printf("hashGroupTime: %d\n", time.Since(startHashTime).Microseconds())
+	startCompareTime := time.Now()
 
-	for _, bucket := range treesByHash.Maps {
-		for hash, ids := range bucket {
-			fmt.Printf("%d:", hash)
-			for _, id := range ids {
-				fmt.Printf(" %d", id)
+	// print hash groups
+	if compWorkers == 0 {
+		if printData {
+			fmt.Println(time.Since(startHashTime).Microseconds())
+		} else {
+			fmt.Printf("hashGroupTime: %d\n", time.Since(startHashTime).Microseconds())
+
+			for _, bucket := range treesByHash.Maps {
+				for hash, ids := range bucket {
+					fmt.Printf("%d:", hash)
+					for _, id := range ids {
+						fmt.Printf(" %d", id)
+					}
+					fmt.Println()
+				}
 			}
-			fmt.Println()
 		}
+		return
 	}
 
 	// compare within groups
-	startCompareTime := time.Now()
-
-	if compWorkers == 0 {
-		return
-	} else if compWorkers > 1 {
+	if compWorkers == 1 {
+		for _, bucket := range treesByHash.Maps {
+			for _, ids := range bucket {
+				for i := 0; i < len(ids)-1; i++ {
+					for j := i + 1; j < len(ids); j++ {
+						id1 := ids[i]
+						id2 := ids[j]
+						if equals(&trees[id1], &trees[id2]) {
+							treesEqual[id1][id2] = true
+							treesEqual[id2][id1] = true
+						}
+					}
+				}
+			}
+		}
+	} else {
 		var wg sync.WaitGroup
 		var workBuf BoundedBuffer
 		workBuf.init(compWorkers)
@@ -143,47 +187,37 @@ func main() {
 			workBuf.push(nil)
 		}
 		wg.Wait()
-	} else {
-		for _, bucket := range treesByHash.Maps {
-			for _, ids := range bucket {
-				for i := 0; i < len(ids)-1; i++ {
-					for j := i + 1; j < len(ids); j++ {
-						id1 := ids[i]
-						id2 := ids[j]
-						if equals(&trees[id1], &trees[id2]) {
-							treesEqual[id1][id2] = true
-							treesEqual[id2][id1] = true
-						}
-					}
-				}
-			}
-		}
 	}
 
-	fmt.Printf("compareTreeTime: %d\n", time.Since(startCompareTime).Microseconds())
+	// print compare results
+	if printData {
+		fmt.Println(time.Since(startCompareTime).Microseconds())
+	} else {
+		fmt.Printf("compareTreeTime: %d\n", time.Since(startCompareTime).Microseconds())
 
-	// print groups
-	group := 0
-	seen := make([]bool, N)
-	for i := 0; i < N-1; i++ {
-		if seen[i] {
-			continue
-		}
-		found := false
-		for j := i + 1; j < N; j++ {
-			if treesEqual[i][j] {
-				if !found {
-					found = true
-					seen[i] = true
-					fmt.Printf("group %d: %d", group, i)
-					group++
-				}
-				seen[j] = true
-				fmt.Printf(" %d", j)
+		// print groups
+		group := 0
+		seen := make([]bool, N)
+		for i := 0; i < N-1; i++ {
+			if seen[i] {
+				continue
 			}
-		}
-		if found {
-			fmt.Println()
+			found := false
+			for j := i + 1; j < N; j++ {
+				if treesEqual[i][j] {
+					if !found {
+						found = true
+						seen[i] = true
+						fmt.Printf("group %d: %d", group, i)
+						group++
+					}
+					seen[j] = true
+					fmt.Printf(" %d", j)
+				}
+			}
+			if found {
+				fmt.Println()
+			}
 		}
 	}
 }
