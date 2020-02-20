@@ -81,9 +81,9 @@ func main() {
 			wg.Wait()
 		}
 		if printData {
-			fmt.Println(time.Since(startHashTime).Microseconds())
+			fmt.Println(time.Since(startHashTime).Nanoseconds())
 		} else {
-			fmt.Printf("hashTime: %d\n", time.Since(startHashTime).Microseconds())
+			fmt.Printf("hashTime: %d\n", time.Since(startHashTime).Nanoseconds())
 		}
 		return
 	}
@@ -130,9 +130,9 @@ func main() {
 	// print hash groups
 	if compWorkers == 0 {
 		if printData {
-			fmt.Println(time.Since(startHashTime).Microseconds())
+			fmt.Println(time.Since(startHashTime).Nanoseconds())
 		} else {
-			fmt.Printf("hashGroupTime: %d\n", time.Since(startHashTime).Microseconds())
+			fmt.Printf("hashGroupTime: %d\n", time.Since(startHashTime).Nanoseconds())
 
 			for _, bucket := range treesByHash.Maps {
 				for hash, ids := range bucket {
@@ -191,9 +191,9 @@ func main() {
 
 	// print compare results
 	if printData {
-		fmt.Println(time.Since(startCompareTime).Microseconds())
+		fmt.Println(time.Since(startCompareTime).Nanoseconds())
 	} else {
-		fmt.Printf("compareTreeTime: %d\n", time.Since(startCompareTime).Microseconds())
+		fmt.Printf("compareTreeTime: %d\n", time.Since(startCompareTime).Nanoseconds())
 
 		// print groups
 		group := 0
