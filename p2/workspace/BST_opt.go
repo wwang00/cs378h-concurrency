@@ -83,7 +83,7 @@ func main() {
 		if printData {
 			fmt.Println(time.Since(startHashTime).Nanoseconds())
 		} else {
-			fmt.Printf("hashTime: %d\n", time.Since(startHashTime).Nanoseconds())
+			fmt.Printf("hashTime: %.5f\n", float64(time.Since(startHashTime).Nanoseconds())/1e9)
 		}
 		return
 	}
@@ -132,7 +132,7 @@ func main() {
 		if printData {
 			fmt.Println(time.Since(startHashTime).Nanoseconds())
 		} else {
-			fmt.Printf("hashGroupTime: %d\n", time.Since(startHashTime).Nanoseconds())
+			fmt.Printf("hashGroupTime: %.5f\n", float64(time.Since(startHashTime).Nanoseconds())/1e9)
 
 			for _, bucket := range treesByHash.Maps {
 				for hash, ids := range bucket {
@@ -193,7 +193,7 @@ func main() {
 	if printData {
 		fmt.Println(time.Since(startCompareTime).Nanoseconds())
 	} else {
-		fmt.Printf("compareTreeTime: %d\n", time.Since(startCompareTime).Nanoseconds())
+		fmt.Printf("compareTreeTime: %.5f\n", float64(time.Since(startCompareTime).Nanoseconds())/1e9)
 
 		// print groups
 		group := 0
