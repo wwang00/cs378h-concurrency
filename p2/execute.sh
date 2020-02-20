@@ -1,7 +1,7 @@
 #!/bin/bash
 
 TESTS="simple coarse fine"
-REPS=30
+REPS=20
 
 cd workspace
 go build -o execute
