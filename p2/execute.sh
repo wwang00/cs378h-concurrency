@@ -1,6 +1,6 @@
 #!/bin/bash
 
-TESTS="simple"
+TESTS="simple coarse fine"
 REPS=30
 
 cd workspace
