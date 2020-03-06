@@ -1,0 +1,17 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "intelliSenseMode": "gcc-x64",
+            "includePath": [
+                "${default}",
+                "/opt/cuda-10.0/include/thrust"
+            ],
+            "compilerPath": "/usr/bin/gcc",
+            "compilerArgs": [
+                "-I /opt/cuda-10.0/include/thrust"
+            ]
+        }
+    ],
+    "version": 4
+}
