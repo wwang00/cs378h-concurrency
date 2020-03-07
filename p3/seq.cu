@@ -1,5 +1,7 @@
 #include <stdlib.h>
+#include <stdio.h>
 
+#include <chrono>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -64,6 +66,8 @@ int main(int argc, char **argv) {
 
   // do centroid calculation
 
+  auto t0 = chrono::system_clock::now();
+
   labels.resize(_points);
   int iter = 0;
   thrust::host_vector<double> old_centroids(_clusters * _dims);
@@ -112,6 +116,22 @@ int main(int argc, char **argv) {
       }
     }
   } while(!(iter == _iterations || converged(centroids, old_centroids)));
+
+  auto t1 = chrono::system_clock::now();
+  int elapsed = (int)((t1 - t0) / chrono::milliseconds(1));
+  printf("%d,%d\n", iter, elapsed);
+  if(_output_centroids) {
+    for (int c = 0; c < _clusters; c ++){
+      printf("%d ", c);
+      for (int d = 0; d < _dims; d++)
+	printf("%lf ", centroids[c * _dims + d]);
+      printf("\n");
+    }
+  } else {
+    printf("clusters:");
+    for (int p = 0; p < _points; p++)
+      printf(" %d", labels[p]);
+  }
   fin.close();
   return 0;
 }
