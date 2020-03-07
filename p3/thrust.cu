@@ -44,7 +44,7 @@ int main(int argc, char **argv) {
   ifstream fin(input_file);
   fin >> P.points;
 
-  cout << "read" << endl; // read in points
+  // read in points
 
   d_vec features(P.points * P.dims);
   h_vec features_host(P.points * P.dims);
@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
   }
   thrust::copy(features_host.begin(), features_host.end(), features.begin());
   
-  cout << "initialize" << endl; // initialize random centroids
+  // initialize random centroids
 
   d_vec centroids(P.clusters * P.dims);
   h_vec centroids_host(P.clusters * P.dims);
@@ -70,21 +70,21 @@ int main(int argc, char **argv) {
   }
   thrust::copy(centroids_host.begin(), centroids_host.end(), centroids.begin());
 
-  cout << "calculate" << endl; // do centroid calculation
-
-  auto t0 = chrono::system_clock::now();
+  // do centroid calculation
 
   d_vec_int labels(P.points);
   h_vec_int labels_host(P.points);
   int iter = 0;
   d_vec old_centroids(P.clusters * P.dims);
   h_vec old_centroids_host(P.clusters * P.dims);
+
+  auto t0 = chrono::system_clock::now();
   do {
     thrust::copy(centroids.begin(), centroids.end(), old_centroids.begin());
     thrust::copy(centroids_host.begin(), centroids_host.end(), old_centroids_host.begin());
     iter++;
 
-    cout << "find" << endl; // find nearest centroids
+    // find nearest centroids
 
     thrust::counting_iterator<int> begin(0);
     thrust::transform(begin,
@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
 		      feature_labeler{P, features.data(), centroids.data()});
     thrust::copy(labels.begin(), labels.end(), labels_host.begin());
     
-    cout << "average" << endl; // average new centroids
+    // average new centroids
 
     for(int c = 0; c < P.clusters; c++) {
       h_vec avg(P.dims);
@@ -114,20 +114,20 @@ int main(int argc, char **argv) {
       }
     }
 
-    cout << "copy" << endl; // copy
+    // copy
 
     thrust::copy(centroids_host.begin(), centroids_host.end(), centroids.begin());
     thrust::copy(labels_host.begin(), labels_host.end(), labels.begin());
   } while(!(iter == P.iterations || converged(centroids_host, old_centroids_host)));
 
   auto t1 = chrono::system_clock::now();
-  int elapsed = (int)((t1 - t0) / chrono::milliseconds(1));
-  printf("%d,%d\n", iter, elapsed);
+  double elapsed = (double)((t1 - t0) / chrono::milliseconds(1));
+  printf("%d,%lf\n", iter, elapsed / iter);
   if(P.output_centroids) {
     for (int c = 0; c < P.clusters; c ++){
       printf("%d ", c);
       for (int d = 0; d < P.dims; d++)
-	printf("%lf ", centroids_host[c * P.dims + d]);
+	printf("%.5lf ", centroids_host[c * P.dims + d]);
       printf("\n");
     }
   } else {

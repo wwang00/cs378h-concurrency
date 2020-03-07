@@ -1,12 +1,12 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include <algorithm>
 #include <chrono>
 #include <iostream>
 #include <fstream>
 #include <string>
-
-#include <thrust/host_vector.h>
+#include <vector>
 
 #include "argparse.h"
 #include "rng.h"
@@ -22,11 +22,11 @@ double _threshold;
 bool   _output_centroids;
 int    _seed;
 
-thrust::host_vector<double> features;
-thrust::host_vector<double> centroids;
-thrust::host_vector<int> labels;
+vector<double> features;
+vector<double> centroids;
+vector<int> labels;
 
-bool converged(thrust::host_vector<double> &curr, thrust::host_vector<double> &prev) {
+bool converged(vector<double> &curr, vector<double> &prev) {
   for(int i = 0; i < curr.size(); i++) {
     if(fabs(curr[i] - prev[i]) > _threshold)
       return false;
@@ -59,21 +59,20 @@ int main(int argc, char **argv) {
   kmeans_srand(_seed);
   for(int c = 0; c < _clusters; c++) {
     int index = kmeans_rand() % _points;
-    thrust::copy(features.begin() + _dims * index,
-		 features.begin() + _dims * (index + 1),
-		 centroids.begin() + _dims * c);
+    std::copy(features.begin() + _dims * index,
+	      features.begin() + _dims * (index + 1),
+	      centroids.begin() + _dims * c);
   }
 
   // do centroid calculation
 
-  auto t0 = chrono::system_clock::now();
-
   labels.resize(_points);
   int iter = 0;
-  thrust::host_vector<double> old_centroids(_clusters * _dims);
-  
+  vector<double> old_centroids(_clusters * _dims);
+
+  auto t0 = chrono::system_clock::now();
   do {
-    thrust::copy(centroids.begin(), centroids.end(), old_centroids.begin());
+    std::copy(centroids.begin(), centroids.end(), old_centroids.begin());
     iter++;
 
     // find nearest centroids
@@ -84,7 +83,7 @@ int main(int argc, char **argv) {
       for(int c = 0; c < _clusters; c++) {
 	double dist_sq = 0;
 	for(int d = 0; d < _dims; d++) {
-	  double diff = fabs(features[p * _dims + d] - centroids[c * _dims + d]);
+	  double diff = features[p * _dims + d] - centroids[c * _dims + d];
 	  dist_sq += diff * diff;
 	}
 	if(dist_sq < min_dist_sq) {
@@ -97,34 +96,35 @@ int main(int argc, char **argv) {
 
     // average new centroids
 
-    for(int c = 0; c < _clusters; c++) {
-      thrust::host_vector<double> avg(_dims);
-      avg.clear();
-      int count = 0;
-      for(int p = 0; p < _points; p++) {
-	if(labels[p] == c) {
-	  count++;
-	  for(int d = 0; d < _dims; d++) {
-	    avg[d] += features[p * _dims + d];
-	  }
-	}
+    vector<double> avgs(_clusters * _dims);
+    avgs.clear();
+    vector<int> counts(_clusters);
+    counts.clear();
+    for(int p = 0; p < _points; p++) {
+      int c = labels[p];
+      for(int d = 0; d < _dims; d++) {
+	avgs[c * _dims + d] += features[p * _dims + d];
       }
+      counts[c]++;
+    }
+    for(int c = 0; c < _clusters; c++) {
+      int count = counts[c];
       if(count > 0) {
 	for(int d = 0; d < _dims; d++) {
-	  centroids[c * _dims + d] = avg[d] / count;
+	  centroids[c * _dims + d] = avgs[c * _dims + d] / count;
 	}
       }
     }
   } while(!(iter == _iterations || converged(centroids, old_centroids)));
 
   auto t1 = chrono::system_clock::now();
-  int elapsed = (int)((t1 - t0) / chrono::milliseconds(1));
-  printf("%d,%d\n", iter, elapsed);
+  double elapsed = (double)((t1 - t0) / chrono::milliseconds(1));
+  printf("%d,%lf\n", iter, elapsed / iter);
   if(_output_centroids) {
     for (int c = 0; c < _clusters; c ++){
       printf("%d ", c);
       for (int d = 0; d < _dims; d++)
-	printf("%lf ", centroids[c * _dims + d]);
+	printf("%.5lf ", centroids[c * _dims + d]);
       printf("\n");
     }
   } else {
