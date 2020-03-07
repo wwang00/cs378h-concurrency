@@ -40,7 +40,7 @@ struct feature_labeler {
 
   // transform: point index -> closest centroid index
   __host__ __device__
-  int operator()(const int p) {
+  int operator()(const int &p) {
     thrust::counting_iterator<int> begin(0);
     return thrust::reduce(thrust::device,
 			  begin,
@@ -49,5 +49,71 @@ struct feature_labeler {
 			  centroid_minimizer{P, centroids, features, p});
   }
 };
+
+struct centroid_accumulator {
+  Parameters P;
+  d_ptr_int labels;
+  d_ptr features;
+  d_ptr totals;
+  d_ptr_int counts;
+  int c;
+
+  // for_each: point index -> if point near centroid, update centroid
+  __host__ __device__
+  void operator()(const int p) {
+    if(labels[p] != c) return;
+    for(int d = 0; d < P.dims; d++)
+      totals[c * P.dims + d] = totals[c * P.dims + d] + features[p * P.dims + d];
+    counts[c] = counts[c] + 1;
+  }
+};
+
+struct centroid_calculator {
+  Parameters P;
+  d_ptr_int labels;
+  d_ptr features;
+  d_ptr totals;
+  d_ptr_int counts;
+
+  // for_each: centroid index -> update all points near that centroid
+  __host__ __device__
+  void operator()(const int c) {
+    thrust::counting_iterator<int> begin(0);
+    thrust::for_each(thrust::device,
+		     begin,
+		     begin + P.points,
+		     centroid_accumulator{P, labels, features, totals, counts, c});
+  }
+};
+
+struct centroid_updater {
+  Parameters P;
+  d_ptr centroids;
+  d_ptr totals;
+  d_ptr_int counts;
+
+  struct centroid_avg {
+    int count;
+
+    // transform: take total / count = avg and put it into centroids
+    __host__ __device__
+    double operator()(const double &val) {
+      return val / count;
+    }
+  };
+
+  //for_each: centroid index -> update the actual centroid value if needed
+  __host__ __device__
+  void operator()(const int c) {
+    int count = counts[c];
+    if(count == 0) return;
+    d_ptr begin = totals + (c * P.dims);
+    thrust::transform(thrust::device,
+		      begin,
+		      begin + P.dims,
+		      centroids + (c * P.dims),
+		      centroid_avg{count});
+  }
+};  
 
 #endif

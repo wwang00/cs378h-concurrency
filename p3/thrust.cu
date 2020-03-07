@@ -73,51 +73,50 @@ int main(int argc, char **argv) {
   // do centroid calculation
 
   d_vec_int labels(P.points);
-  h_vec_int labels_host(P.points);
   int iter = 0;
   d_vec old_centroids(P.clusters * P.dims);
   h_vec old_centroids_host(P.clusters * P.dims);
 
   auto t0 = chrono::system_clock::now();
   do {
-    thrust::copy(centroids.begin(), centroids.end(), old_centroids.begin());
+    //thrust::copy(centroids.begin(), centroids.end(), old_centroids.begin());
     thrust::copy(centroids_host.begin(), centroids_host.end(), old_centroids_host.begin());
     iter++;
 
     // find nearest centroids
 
     thrust::counting_iterator<int> begin(0);
-    thrust::transform(begin,
+    thrust::transform(thrust::device,
+		      begin,
 		      begin + P.points,
 		      labels.begin(),
 		      feature_labeler{P, features.data(), centroids.data()});
-    thrust::copy(labels.begin(), labels.end(), labels_host.begin());
     
-    // average new centroids
+    // calculate new centroids
 
-    for(int c = 0; c < P.clusters; c++) {
-      h_vec avg(P.dims);
-      avg.clear();
-      int count = 0;
-      for(int p = 0; p < P.points; p++) {
-	if(labels_host[p] == c) {
-	  count++;
-	  for(int d = 0; d < P.dims; d++) {
-	    avg[d] += features_host[p * P.dims + d];
-	  }
-	}
-      }
-      if(count > 0) {
-	for(int d = 0; d < P.dims; d++) {
-	  centroids_host[c * P.dims + d] = avg[d] / count;
-	}
-      }
-    }
+    d_vec totals(P.clusters * P.dims);
+    totals.clear();
+    d_vec_int counts(P.clusters);
+    counts.clear();
+    begin = thrust::make_counting_iterator<int>(0);
+    thrust::for_each(thrust::device,
+		     begin,
+		     begin + P.clusters,
+		     centroid_calculator{
+		       P, labels.data(), features.data(), totals.data(), counts.data()});
+    for(int c = 0; c < P.clusters; c++) cout << counts[c] << " "; cout << endl;
+    
+    // update centroids
+
+    begin = thrust::make_counting_iterator<int>(0);
+    thrust::for_each(thrust::device,
+		     begin,
+		     begin + P.clusters,
+		     centroid_updater{P, centroids.data(), totals.data(), counts.data()});
 
     // copy
 
-    thrust::copy(centroids_host.begin(), centroids_host.end(), centroids.begin());
-    thrust::copy(labels_host.begin(), labels_host.end(), labels.begin());
+    thrust::copy(centroids.begin(), centroids.end(), centroids_host.begin());
   } while(!(iter == P.iterations || converged(centroids_host, old_centroids_host)));
 
   auto t1 = chrono::system_clock::now();
@@ -132,8 +131,8 @@ int main(int argc, char **argv) {
     }
   } else {
     printf("clusters:");
-    for (int p = 0; p < P.points; p++)
-      printf(" %d", labels_host[p]);
+    //for (int p = 0; p < P.points; p++)
+      //printf(" %d", labels[p]);
   }
   fin.close();
   return 0;
