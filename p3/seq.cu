@@ -54,7 +54,7 @@ int main(int argc, char **argv) {
   }
   
   // initialize random centroids
-
+  
   centroids.resize(_clusters * _dims);
   kmeans_srand(_seed);
   for(int c = 0; c < _clusters; c++) {
@@ -63,20 +63,20 @@ int main(int argc, char **argv) {
 	      features.begin() + _dims * (index + 1),
 	      centroids.begin() + _dims * c);
   }
-
+  
   // do centroid calculation
-
+  
   labels.resize(_points);
   int iter = 0;
   vector<double> old_centroids(_clusters * _dims);
-
+  
   auto t0 = chrono::system_clock::now();
   do {
     std::copy(centroids.begin(), centroids.end(), old_centroids.begin());
     iter++;
-
+    
     // find nearest centroids
-
+    
     for(int p = 0; p < _points; p++) {
       int nearest;
       double min_dist_sq = 1e9;
@@ -93,9 +93,9 @@ int main(int argc, char **argv) {
       }
       labels[p] = nearest;
     }
-
+    
     // average new centroids
-
+    
     vector<double> avgs(_clusters * _dims);
     avgs.clear();
     vector<int> counts(_clusters);
@@ -116,10 +116,11 @@ int main(int argc, char **argv) {
       }
     }
   } while(!(iter == _iterations || converged(centroids, old_centroids)));
-
+  
   auto t1 = chrono::system_clock::now();
   double elapsed = (double)((t1 - t0) / chrono::milliseconds(1));
   printf("%d,%lf\n", iter, elapsed / iter);
+  
   if(_output_centroids) {
     for (int c = 0; c < _clusters; c ++){
       printf("%d ", c);

@@ -16,30 +16,22 @@
 
 #include "defs.h"
 
-struct convergence_checker {
-  double threshold;
-  
-  // transform: if elements within threshold, return true
-  __host__ __device__
-  bool operator()(const thrust::tuple<double, double> &e) {
-    double diff = thrust::get<0>(e) - thrust::get<1>(e);
-    return -threshold <= diff && diff <= threshold;
-  }
-};
-
-struct feature_labeler {
+struct centroid_calculator {
   Parameters P;
-  d_ptr features;
-  d_ptr centroids;
+  d_ptr      features;
+  d_ptr      centroids;
+  d_ptr_int  labels;
+  d_ptr_int  counts;
+  d_ptr      totals;
   
   struct centroid_minimizer {
     Parameters P;
-    d_ptr features;
-    d_ptr centroids;
-    int p;
+    d_ptr      features;
+    d_ptr      centroids;
+    int        p;
     
     // reduce: two centroid indices -> the closer one to the point p
-    __host__ __device__
+    __device__
     int operator()(const int &a, const int &b) {
       if(a < 0) return b; if(b < 0) return a;
       double da = 0, db = 0, diff;
@@ -52,71 +44,67 @@ struct feature_labeler {
       return da < db ? a : b;
     }
   };
-
-  // transform: point index -> closest centroid index
-  __host__ __device__
-  int operator()(const int &p) {
-    thrust::counting_iterator<int> begin(0);
-    return thrust::reduce(thrust::device,
-			  begin,
-			  begin + P.clusters,
-			  -1,
-			  centroid_minimizer{P, features, centroids, p});
-  }
-};
-
-struct centroid_calculator {
-  Parameters P;
-  d_ptr_int labels;
-  d_ptr features;
-  d_ptr totals;
-  d_ptr_int counts;
   
   struct centroid_accumulator {
     Parameters P;
-    d_ptr_int labels;
-    d_ptr features;
-    d_ptr totals;
-    d_ptr_int counts;
-    int c;
+    d_ptr      features;
+    d_ptr      totals;
+    int        c;
+    int        p;
     
-    // for_each: point index -> if point near centroid, update centroid
-    __host__ __device__
-    void operator()(const int p) {
-      if(labels[p] != c) return;
-      for(int d = 0; d < P.dims; d++)
-	totals[c * P.dims + d] = totals[c * P.dims + d] + features[p * P.dims + d];
-      counts[c] = counts[c] + 1;
+    // add point coordinate to closest centroid coordinate atomically
+    __device__
+    void operator()(const int d) {
+      atomicAdd((totals + (c * P.dims + d)).get(), (double)features[p * P.dims + d]);
     }
   };
   
-  // for_each: centroid index -> update all points near that centroid
-  __host__ __device__
-  void operator()(const int c) {
+  // for_each: point -> get closest centroid, update label, update count, update total
+  __device__
+  void operator()(const int p) {
     thrust::counting_iterator<int> begin(0);
+    int closest = thrust::reduce(thrust::device,
+				 begin,
+				 begin + P.clusters,
+				 -1,
+				 centroid_minimizer{P, features, centroids, p});
+    labels[p] = closest;
+    atomicAdd((counts + closest).get(), 1);
+    begin = thrust::make_counting_iterator<int>(0);
     thrust::for_each(thrust::device,
 		     begin,
-		     begin + P.points,
-		     centroid_accumulator{P, labels, features, totals, counts, c});
+		     begin + P.dims,
+		     centroid_accumulator{P, features, totals, closest, p});
+  }
+};
+
+struct convergence_checker {
+  double threshold;
+  
+  // transform: if elements within threshold, return true
+  __host__ __device__
+  bool operator()(const thrust::tuple<double, double> &e) {
+    double diff = thrust::get<0>(e) - thrust::get<1>(e);
+    return -threshold <= diff && diff <= threshold;
   }
 };
 
 struct centroid_updater {
   Parameters P;
   d_ptr centroids;
-  d_ptr totals;
   d_ptr_int counts;
-
+  d_ptr totals;
+  
   struct centroid_avg {
     int count;
-
+    
     // transform: take total / count = avg and put it into centroids
     __host__ __device__
     double operator()(const double &val) {
       return val / count;
     }
   };
-
+  
   //for_each: centroid index -> update the actual centroid value if needed
   __host__ __device__
   void operator()(const int c) {

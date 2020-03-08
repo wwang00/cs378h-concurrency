@@ -1,16 +1,17 @@
+NVCC = nvcc -arch=sm_60
 OBJS = argparse.o rng.o
 
 seq : seq.o $(OBJS)
-	nvcc -o seq seq.o $(OBJS)
+	$(NVCC) -o seq seq.o $(OBJS)
 
 thrust : thrust.o $(OBJS)
-	nvcc -o thrust thrust.o $(OBJS)
+	$(NVCC) -o thrust thrust.o $(OBJS)
 
 seq.o :
-	nvcc -c seq.cu
+	$(NVCC) -c seq.cu
 
 thrust.o:
-	nvcc -c thrust.cu
+	$(NVCC) -c thrust.cu
 
 argparse.o : argparse.h
 	g++ -c argparse.cpp
