@@ -13,21 +13,22 @@
 #include <thrust/device_ptr.h>
 
 #include "argparse.h"
-#include "defs.h"
 #include "functors.h"
 #include "rng.h"
-#include "strided_range.h"
 
 using namespace std;
 
 Parameters P;
 
-bool converged(h_vec &curr, h_vec &prev) {
-  for(int i = 0; i < curr.size(); i++) {
-    if(fabs(curr[i] - prev[i]) > P.threshold)
-      return false;
-  }
-  return true;
+bool converged(d_vec &curr, d_vec &prev) {
+  auto begin = thrust::make_zip_iterator(thrust::make_tuple(curr.begin(), prev.begin()));
+  auto end = thrust::make_zip_iterator(thrust::make_tuple(curr.end(), prev.end()));
+  return thrust::transform_reduce(thrust::device,
+				  begin,
+				  end,
+				  convergence_checker{P.threshold},
+				  true,
+				  thrust::logical_and<bool>());
 }
 
 int main(int argc, char **argv) {
@@ -73,14 +74,13 @@ int main(int argc, char **argv) {
   // do centroid calculation
 
   d_vec_int labels(P.points);
+  h_vec_int labels_host(P.points);
   int iter = 0;
   d_vec old_centroids(P.clusters * P.dims);
-  h_vec old_centroids_host(P.clusters * P.dims);
 
   auto t0 = chrono::system_clock::now();
   do {
-    //thrust::copy(centroids.begin(), centroids.end(), old_centroids.begin());
-    thrust::copy(centroids_host.begin(), centroids_host.end(), old_centroids_host.begin());
+    thrust::copy(centroids.begin(), centroids.end(), old_centroids.begin());
     iter++;
 
     // find nearest centroids
@@ -104,7 +104,6 @@ int main(int argc, char **argv) {
 		     begin + P.clusters,
 		     centroid_calculator{
 		       P, labels.data(), features.data(), totals.data(), counts.data()});
-    for(int c = 0; c < P.clusters; c++) cout << counts[c] << " "; cout << endl;
     
     // update centroids
 
@@ -114,15 +113,16 @@ int main(int argc, char **argv) {
 		     begin + P.clusters,
 		     centroid_updater{P, centroids.data(), totals.data(), counts.data()});
 
-    // copy
-
-    thrust::copy(centroids.begin(), centroids.end(), centroids_host.begin());
-  } while(!(iter == P.iterations || converged(centroids_host, old_centroids_host)));
+  } while(!(iter == P.iterations || converged(centroids, old_centroids)));
 
   auto t1 = chrono::system_clock::now();
   double elapsed = (double)((t1 - t0) / chrono::milliseconds(1));
   printf("%d,%lf\n", iter, elapsed / iter);
+
   if(P.output_centroids) {
+    cout << "before" << endl;
+    thrust::copy(centroids.begin(), centroids.end(), centroids_host.begin());
+    cout << "after" << endl;
     for (int c = 0; c < P.clusters; c ++){
       printf("%d ", c);
       for (int d = 0; d < P.dims; d++)
@@ -130,9 +130,10 @@ int main(int argc, char **argv) {
       printf("\n");
     }
   } else {
+    thrust::copy(labels.begin(), labels.end(), labels_host.begin());
     printf("clusters:");
-    //for (int p = 0; p < P.points; p++)
-      //printf(" %d", labels[p]);
+    for (int p = 0; p < P.points; p++)
+      printf(" %d", labels_host[p]);
   }
   fin.close();
   return 0;
