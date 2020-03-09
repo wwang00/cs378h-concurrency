@@ -26,14 +26,6 @@ vector<double> features;
 vector<double> centroids;
 vector<int> labels;
 
-bool converged(vector<double> &curr, vector<double> &prev) {
-  for(int i = 0; i < curr.size(); i++) {
-    if(abs(curr[i] - prev[i]) > _threshold)
-      return false;
-  }
-  return true;
-}
-
 int main(int argc, char **argv) {
   unordered_set<string> flags{"-c"};
   unordered_set<string> opts{"-k", "-d", "-i", "-m", "-t", "-s"};
@@ -67,13 +59,14 @@ int main(int argc, char **argv) {
   // do centroid calculation
   
   labels.resize(_points);
+
   int iter = 0;
-  vector<double> old_centroids(_clusters * _dims);
+  bool conv;
   
   auto t0 = chrono::system_clock::now();
   do {
-    copy(centroids.begin(), centroids.end(), old_centroids.begin());
     iter++;
+    conv = true;
     
     // calculate centroid totals
     
@@ -100,17 +93,22 @@ int main(int argc, char **argv) {
       }
     }
 
-    // update centroids
+    // update centroids and convergence
     
     for(int c = 0; c < _clusters; c++) {
       int count = counts[c];
       if(count > 0) {
 	for(int d = 0; d < _dims; d++) {
-	  centroids[c * _dims + d] = totals[c * _dims + d] / count;
+	  int i = c * _dims + d;
+	  double new_val = totals[i] / count;
+	  double diff = centroids[i] - new_val;
+	  if(diff < -_threshold || diff > _threshold)
+	    conv = false;
+	  centroids[i] = new_val;
 	}
       }
     }
-  } while(!(iter == _iterations || converged(centroids, old_centroids)));
+  } while(!(iter == _iterations || conv));
   
   auto t1 = chrono::system_clock::now();
   double elapsed = (double)((t1 - t0) / chrono::milliseconds(1));

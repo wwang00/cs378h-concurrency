@@ -75,9 +75,6 @@ int main(int argc, char **argv) {
   size_t totals_size = P.clusters * P.dims * sizeof(double);
   if(cudaMalloc(&totals, totals_size)) return -1;
   
-  double *old_centroids;
-  if(cudaMalloc(&old_centroids, centroids_size)) return -1;
-  
   int iter = 0;
   bool conv_host;
   bool *conv;
@@ -85,9 +82,8 @@ int main(int argc, char **argv) {
   
   auto t0 = chrono::system_clock::now();
   do {
-    if(cudaMemcpy(old_centroids, centroids, centroids_size, cudaMemcpyDeviceToDevice)) return -1;
-    if(cudaMemset(conv, true, sizeof(bool))) return -1;
     iter++;
+    if(cudaMemset(conv, true, sizeof(bool))) return -1;
     
     // calculate centroid totals
     
@@ -99,23 +95,16 @@ int main(int argc, char **argv) {
 					 labels,
 					 counts,
 					 totals);
-    //cudaDeviceSynchronize();
+    cudaDeviceSynchronize();
     
-    // update centroids
+    // update centroids and check convergence
     
     centroid_updater<<<BLOCKS, TPB>>>(P,
 				      centroids,
 				      counts,
-				      totals);
-    //cudaDeviceSynchronize();
-    
-    // check convergence
-    
-    converged<<<BLOCKS, TPB>>>(P,
-			       centroids,
-			       old_centroids,
-			       conv);
-    //cudaDeviceSynchronize();
+				      totals,
+				      conv);
+    cudaDeviceSynchronize();
     if(cudaMemcpy(&conv_host, conv, sizeof(bool), cudaMemcpyDeviceToHost)) return -1;
   } while(!(iter == P.iterations || conv_host));
   
@@ -137,6 +126,12 @@ int main(int argc, char **argv) {
     for (int p = 0; p < P.points; p++)
       printf(" %d", labels_host[p]);
   }
+  cudaFree(features);
+  cudaFree(centroids);
+  cudaFree(labels);
+  cudaFree(counts);
+  cudaFree(totals);
+  cudaFree(conv);
   fin.close();
   return 0;
 }

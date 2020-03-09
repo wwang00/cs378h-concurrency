@@ -20,17 +20,6 @@ using namespace std;
 
 Parameters P;
 
-bool converged(d_vec &curr, d_vec &prev) {
-  auto begin = thrust::make_zip_iterator(thrust::make_tuple(curr.begin(), prev.begin()));
-  auto end = thrust::make_zip_iterator(thrust::make_tuple(curr.end(), prev.end()));
-  return thrust::transform_reduce(thrust::device,
-				  begin,
-				  end,
-				  convergence_checker{P.threshold},
-				  true,
-				  thrust::logical_and<bool>());
-}
-
 int main(int argc, char **argv) {
   unordered_set<string> flags{"-c"};
   unordered_set<string> opts{"-k", "-d", "-i", "-m", "-t", "-s"};
@@ -75,14 +64,15 @@ int main(int argc, char **argv) {
   
   d_vec_int labels(P.points);
   h_vec_int labels_host(P.points);
-  d_vec old_centroids(P.clusters * P.dims);
 
   int iter = 0;
+  thrust::device_ptr<void> conv_mem = thrust::device_malloc(sizeof(bool));
+  d_ptr_bool conv = thrust::device_pointer_cast<bool>((bool *)conv_mem.get());
   
   auto t0 = chrono::system_clock::now();
   do {
-    thrust::copy(centroids.begin(), centroids.end(), old_centroids.begin());
     iter++;
+    *conv = true;
     
     // calculate centroid totals
     
@@ -99,14 +89,14 @@ int main(int argc, char **argv) {
 			 counts.data(),
 			 totals.data()});
     
-    // update centroids
+    // update centroids and convergence
     
     begin = thrust::make_counting_iterator<int>(0);
     thrust::for_each(thrust::device,
 		     begin,
 		     begin + P.clusters,
-		     centroid_updater{P, centroids.data(), counts.data(), totals.data()});
-  } while(!(iter == P.iterations || converged(centroids, old_centroids)));
+		     centroid_updater{P, centroids.data(), counts.data(), totals.data(), conv});
+  } while(!(iter == P.iterations || *conv));
   
   auto t1 = chrono::system_clock::now();
   double elapsed = (double)((t1 - t0) / chrono::milliseconds(1));
@@ -126,6 +116,7 @@ int main(int argc, char **argv) {
     for (int p = 0; p < P.points; p++)
       printf(" %d", labels_host[p]);
   }
+  thrust::device_free(conv_mem);
   fin.close();
   return 0;
 }

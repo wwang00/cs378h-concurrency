@@ -17,17 +17,6 @@
 #include "params.h"
 #include "thrust_defs.h"
 
-struct convergence_checker {
-  double threshold;
-  
-  // transform: if elements within threshold, return true
-  __host__ __device__
-  bool operator()(const thrust::tuple<double, double> &e) {
-    double diff = thrust::get<0>(e) - thrust::get<1>(e);
-    return -threshold <= diff && diff <= threshold;
-  }
-};
-
 struct centroid_calculator {
   Parameters P;
   d_ptr      features;
@@ -94,14 +83,24 @@ struct centroid_updater {
   d_ptr      centroids;
   d_ptr_int  counts;
   d_ptr      totals;
+  d_ptr_bool conv;
   
   struct centroid_avg {
-    int count;
+    Parameters P;
+    d_ptr      centroids;
+    d_ptr_int  counts;
+    d_ptr      totals;
+    d_ptr_bool conv;
+    int        count;
     
-    // transform: take total / count = avg and put it into centroids
+    // for_each: take total / count = avg and put it into centroids; check converged
     __host__ __device__
-    double operator()(const double &val) {
-      return val / count;
+    void operator()(const int i) {
+      double new_val = totals[i] / count;
+      double diff = centroids[i] - new_val;
+      if(diff < -P.threshold || diff > P.threshold)
+	*conv = false;
+      centroids[i] = new_val;
     }
   };
   
@@ -110,12 +109,16 @@ struct centroid_updater {
   void operator()(const int c) {
     int count = counts[c];
     if(count == 0) return;
-    d_ptr begin = totals + (c * P.dims);
-    thrust::transform(thrust::device,
-		      begin,
-		      begin + P.dims,
-		      centroids + (c * P.dims),
-		      centroid_avg{count});
+    thrust::counting_iterator<int> begin(c * P.dims);
+    thrust::for_each(thrust::device,
+		     begin,
+		     begin + P.dims,
+		     centroid_avg{P,
+			 centroids,
+			 counts,
+			 totals,
+			 conv,
+			 count});
   }
 };  
 

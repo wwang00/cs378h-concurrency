@@ -3,31 +3,8 @@
 
 #include "params.h"
 
-#define BLOCKS 1
-#define TPB    1
-
-__global__
-void converged(Parameters P,
-	       double     *curr,
-	       double     *prev,
-	       bool       *conv) {
-  int block = blockIdx.x;
-  int thread = threadIdx.x;
-  int grid_dim = gridDim.x;
-  int block_dim = blockDim.x;
-  
-  int begin = block * block_dim + thread;
-  int step = grid_dim * block_dim;
-  int end = P.clusters * P.dims;
-  
-  for(int c = begin; c < end; c += step) {
-    double diff = curr[c] - prev[c];
-    if(diff < -P.threshold || diff > P.threshold) {
-      *conv = false;
-      return;
-    }
-  }
-}
+#define BLOCKS 64
+#define TPB    64
 
 __global__
 void centroid_calculator(Parameters P,
@@ -71,7 +48,8 @@ __global__
 void centroid_updater(Parameters P,
 		      double     *centroids,
 		      int        *counts,
-		      double     *totals) {
+		      double     *totals,
+		      bool       *conv) {
   int block = blockIdx.x;
   int thread = threadIdx.x;
   int grid_dim = gridDim.x;
@@ -85,7 +63,12 @@ void centroid_updater(Parameters P,
     int count = counts[c];
     if(count > 0) {
       for(int d = 0; d < P.dims; d++) {
-	centroids[c * P.dims + d] = totals[c * P.dims + d] / count;
+	int i = c * P.dims + d;
+	double new_val = totals[i] / count;
+	double diff = centroids[i]  - new_val;
+	if(diff < -P.threshold || diff > P.threshold)
+	  *conv = false;
+	centroids[i] = new_val;
       }
     }
   }
