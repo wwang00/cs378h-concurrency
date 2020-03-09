@@ -1,5 +1,5 @@
-#ifndef _FUNCTORS_H_
-#define _FUNCTORS_H_
+#ifndef _THRUST_FUNCTORS_H_
+#define _THRUST_FUNCTORS_H_
 
 #include <stdlib.h>
 
@@ -14,7 +14,19 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
 
-#include "defs.h"
+#include "params.h"
+#include "thrust_defs.h"
+
+struct convergence_checker {
+  double threshold;
+  
+  // transform: if elements within threshold, return true
+  __host__ __device__
+  bool operator()(const thrust::tuple<double, double> &e) {
+    double diff = thrust::get<0>(e) - thrust::get<1>(e);
+    return -threshold <= diff && diff <= threshold;
+  }
+};
 
 struct centroid_calculator {
   Parameters P;
@@ -33,7 +45,6 @@ struct centroid_calculator {
     // reduce: two centroid indices -> the closer one to the point p
     __device__
     int operator()(const int &a, const int &b) {
-      if(a < 0) return b; if(b < 0) return a;
       double da = 0, db = 0, diff;
       for(int d = 0; d < P.dims; d++) {
 	diff = centroids[a * P.dims + d] - features[p * P.dims + d];
@@ -66,7 +77,7 @@ struct centroid_calculator {
     int closest = thrust::reduce(thrust::device,
 				 begin,
 				 begin + P.clusters,
-				 -1,
+				 0,
 				 centroid_minimizer{P, features, centroids, p});
     labels[p] = closest;
     atomicAdd((counts + closest).get(), 1);
@@ -78,22 +89,11 @@ struct centroid_calculator {
   }
 };
 
-struct convergence_checker {
-  double threshold;
-  
-  // transform: if elements within threshold, return true
-  __host__ __device__
-  bool operator()(const thrust::tuple<double, double> &e) {
-    double diff = thrust::get<0>(e) - thrust::get<1>(e);
-    return -threshold <= diff && diff <= threshold;
-  }
-};
-
 struct centroid_updater {
   Parameters P;
-  d_ptr centroids;
-  d_ptr_int counts;
-  d_ptr totals;
+  d_ptr      centroids;
+  d_ptr_int  counts;
+  d_ptr      totals;
   
   struct centroid_avg {
     int count;

@@ -1,34 +1,49 @@
+CC = g++ -O3
 NVCC = nvcc -arch=sm_60
 OBJS = argparse.o rng.o
 
+DIMS = 16
+INPUT = n2048-d$(DIMS)-c16.txt
+
 seq : seq.o $(OBJS)
-	$(NVCC) -o seq seq.o $(OBJS)
+	$(CC) -o seq seq.o $(OBJS)
 
 thrust : thrust.o $(OBJS)
 	$(NVCC) -o thrust thrust.o $(OBJS)
 
+cuda : cuda.o $(OBJS)
+	$(NVCC) -o cuda cuda.o $(OBJS)
+
 seq.o :
-	$(NVCC) -c seq.cu
+	$(CC) -c seq.cpp
 
 thrust.o:
 	$(NVCC) -c thrust.cu
 
+cuda.o:
+	$(NVCC) -c cuda.cu
+
 argparse.o : argparse.h
-	g++ -c argparse.cpp
+	$(CC) -c argparse.cpp
 
 rng.o : rng.h
-	g++ -c rng.cpp
+	$(CC) -c rng.cpp
 
 .PHONY : seqtest
 seqtest :
 	make seq
-	./seq -k 16 -d 16 -i n2048-d16-c16.txt -m 150 -t 1e-5 -s 8675309 -c
+	./seq -k 16 -d $(DIMS) -i $(INPUT) -m 150 -t 1e-5 -s 8675309 -c
 
 .PHONY : thrusttest
 thrusttest :
 	make thrust
-	./thrust -k 16 -d 16 -i n2048-d16-c16.txt -m 150 -t 1e-5 -s 8675309 -c
+	./thrust -k 16 -d $(DIMS) -i $(INPUT) -m 150 -t 1e-5 -s 8675309 -c
+
+.PHONY : cudatest
+cudatest :
+	make cuda
+	./cuda -k 16 -d $(DIMS) -i $(INPUT) -m 150 -t 1e-5 -s 8675309 -c
 
 .PHONY : clean
 clean :
-	rm -f seq thrust seq.o thrust.o $(OBJS)
+	rm -f seq thrust cuda seq.o thrust.o cuda.o $(OBJS)

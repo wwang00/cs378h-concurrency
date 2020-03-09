@@ -28,7 +28,7 @@ vector<int> labels;
 
 bool converged(vector<double> &curr, vector<double> &prev) {
   for(int i = 0; i < curr.size(); i++) {
-    if(fabs(curr[i] - prev[i]) > _threshold)
+    if(abs(curr[i] - prev[i]) > _threshold)
       return false;
   }
   return true;
@@ -59,9 +59,9 @@ int main(int argc, char **argv) {
   kmeans_srand(_seed);
   for(int c = 0; c < _clusters; c++) {
     int index = kmeans_rand() % _points;
-    std::copy(features.begin() + _dims * index,
-	      features.begin() + _dims * (index + 1),
-	      centroids.begin() + _dims * c);
+    copy(features.begin() + _dims * index,
+	 features.begin() + _dims * (index + 1),
+	 centroids.begin() + _dims * c);
   }
   
   // do centroid calculation
@@ -72,13 +72,15 @@ int main(int argc, char **argv) {
   
   auto t0 = chrono::system_clock::now();
   do {
-    std::copy(centroids.begin(), centroids.end(), old_centroids.begin());
+    copy(centroids.begin(), centroids.end(), old_centroids.begin());
     iter++;
     
-    // find nearest centroids
+    // calculate centroid totals
     
+    vector<int> counts(_clusters, 0);
+    vector<double> totals(_clusters * _dims, 0);
     for(int p = 0; p < _points; p++) {
-      int nearest;
+      int closest;
       double min_dist_sq = 1e9;
       for(int c = 0; c < _clusters; c++) {
 	double dist_sq = 0;
@@ -88,30 +90,23 @@ int main(int argc, char **argv) {
 	}
 	if(dist_sq < min_dist_sq) {
 	  min_dist_sq = dist_sq;
-	  nearest = c;
+	  closest = c;
 	}
       }
-      labels[p] = nearest;
-    }
-    
-    // average new centroids
-    
-    vector<double> avgs(_clusters * _dims);
-    avgs.clear();
-    vector<int> counts(_clusters);
-    counts.clear();
-    for(int p = 0; p < _points; p++) {
-      int c = labels[p];
+      labels[p] = closest;
+      counts[closest]++;
       for(int d = 0; d < _dims; d++) {
-	avgs[c * _dims + d] += features[p * _dims + d];
+	totals[closest * _dims + d] += features[p * _dims + d];
       }
-      counts[c]++;
     }
+
+    // update centroids
+    
     for(int c = 0; c < _clusters; c++) {
       int count = counts[c];
       if(count > 0) {
 	for(int d = 0; d < _dims; d++) {
-	  centroids[c * _dims + d] = avgs[c * _dims + d] / count;
+	  centroids[c * _dims + d] = totals[c * _dims + d] / count;
 	}
       }
     }
@@ -119,7 +114,7 @@ int main(int argc, char **argv) {
   
   auto t1 = chrono::system_clock::now();
   double elapsed = (double)((t1 - t0) / chrono::milliseconds(1));
-  printf("%d,%lf\n", iter, elapsed / iter);
+  printf("%d,%.5lf\n", iter, elapsed / iter);
   
   if(_output_centroids) {
     for (int c = 0; c < _clusters; c ++){

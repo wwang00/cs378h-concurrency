@@ -13,7 +13,7 @@
 #include <thrust/device_ptr.h>
 
 #include "argparse.h"
-#include "functors.h"
+#include "thrust_functors.h"
 #include "rng.h"
 
 using namespace std;
@@ -75,8 +75,9 @@ int main(int argc, char **argv) {
   
   d_vec_int labels(P.points);
   h_vec_int labels_host(P.points);
-  int iter = 0;
   d_vec old_centroids(P.clusters * P.dims);
+
+  int iter = 0;
   
   auto t0 = chrono::system_clock::now();
   do {
@@ -105,7 +106,6 @@ int main(int argc, char **argv) {
 		     begin,
 		     begin + P.clusters,
 		     centroid_updater{P, centroids.data(), counts.data(), totals.data()});
-    
   } while(!(iter == P.iterations || converged(centroids, old_centroids)));
   
   auto t1 = chrono::system_clock::now();
