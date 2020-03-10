@@ -3,6 +3,8 @@
 
 #include "params.h"
 
+#define BLOCKS 1024
+#define TPB    64
 #define SH_SZ  0xc000
 
 __global__

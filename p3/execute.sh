@@ -1,7 +1,7 @@
 #!/bin/bash
 
 REPS=20
-PROGS="seq thrust"
+PROGS="shmem"
 CFGS=3
 N=(2048 16384 65536)
 D=(16 24 32)
@@ -19,9 +19,10 @@ cd ..
 
 rm output/*.data
 
-for (( cfg = 0; cfg < CFGS; cfg++ )); do
-    for prog in $PROGS; do
-	for (( i = 0; i < REPS; i++ )); do
+
+for prog in $PROGS; do
+    for (( i = 0; i < REPS; i++ )); do
+	for (( cfg = 0; cfg < CFGS; cfg++ )); do
 	    n=${N[$cfg]}
 	    d=${D[$cfg]}
 	    id="n${n}-d${d}"
@@ -29,7 +30,7 @@ for (( cfg = 0; cfg < CFGS; cfg++ )); do
 	    ofile="../output/${id}-${prog}.data"
 	    echo $id - $prog - $i
 	    cd workspace
-	    ./$prog -k $K -d $d -i $ifile -m $M -t $T -s $S >> $ofile
+	    ./$prog -k $K -d $d -i $ifile -m $M -t $T -s $S -c >> $ofile
 	    cd ..
 	done
     done

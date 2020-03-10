@@ -1,8 +1,9 @@
 #!/bin/bash
 
 REPS=10
-PROGS="cuda"
-CFGS="32 128 512 2048"
+PROGS="shmem"
+BLKS="1 4 16 64 256 1024"
+TPBS="32 64 128 256 512 1024"
 N=65536
 D=32
 K=16
@@ -20,15 +21,15 @@ cd ..
 rm output/*.data
 
 for prog in $PROGS; do
-    for blks in 1; do
-	for tpb in 16384 32768; do
-	    for (( i = 0; i < REPS; i++ )); do
+    for (( i = 0; i < REPS; i++ )); do
+	for blk in $BLKS; do
+	    for tpb in $TPBS; do
 		id="n${N}-d${D}"
 		ifile="../input/${id}.txt"
-		ofile="../output/${id}-b${blks}-t${tpb}-${prog}.data"
-		echo $id - $blks - $tpb - $prog - $i
+		ofile="../output/${id}-b${blk}-t${tpb}-${prog}.data"
+		echo $id - $blk - $tpb - $prog - $i
 		cd workspace
-		./$prog -k $K -d $D -i $ifile -m $M -t $T -s $S -blks $blks -tpb $tpb >> $ofile
+		./$prog -k $K -d $D -i $ifile -m $M -t $T -s $S -c -blk $blk -tpb $tpb >> $ofile
 		cd ..
 	    done
 	done

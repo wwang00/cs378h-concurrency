@@ -1,6 +1,9 @@
 #ifndef _CUDA_UTIL_H_
 #define _CUDA_UTIL_H_
 
+#define BLOCKS 16
+#define TPB    256
+
 #include "params.h"
 
 __global__
