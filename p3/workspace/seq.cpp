@@ -27,7 +27,7 @@ vector<double> centroids;
 vector<int> labels;
 
 int main(int argc, char **argv) {
-  unordered_set<string> flags{"-c"};
+  unordered_set<string> flags{"-c", "-q"};
   unordered_set<string> opts{"-k", "-d", "-i", "-m", "-t", "-s"};
   unordered_map<string, string> args = parse_args(argc, argv, flags, opts);
   _clusters = stoi(args["-k"]);
@@ -109,23 +109,29 @@ int main(int argc, char **argv) {
       }
     }
   } while(!(iter == _iterations || conv));
-  
+
+  auto t1 = chrono::system_clock::now();
+  long elapsed = (long)((t1 - t0) / chrono::microseconds(1));
+  printf("%ld\n", elapsed / iter);
+  /*
   auto t1 = chrono::system_clock::now();
   double elapsed = (double)((t1 - t0) / chrono::milliseconds(1));
   printf("%d,%.5lf\n", iter, elapsed / iter);
-  
-  if(_output_centroids) {
-    for (int c = 0; c < _clusters; c ++){
-      printf("%d ", c);
-      for (int d = 0; d < _dims; d++)
-	printf("%.5lf ", centroids[c * _dims + d]);
-      printf("\n");
+  if(!args.count("-q")) {
+    if(_output_centroids) {
+      for (int c = 0; c < _clusters; c ++){
+	printf("%d ", c);
+	for (int d = 0; d < _dims; d++)
+	  printf("%.5lf ", centroids[c * _dims + d]);
+	printf("\n");
+      }
+    } else {
+      printf("clusters:");
+      for (int p = 0; p < _points; p++)
+	printf(" %d", labels[p]);
     }
-  } else {
-    printf("clusters:");
-    for (int p = 0; p < _points; p++)
-      printf(" %d", labels[p]);
   }
+  */
   fin.close();
   return 0;
 }

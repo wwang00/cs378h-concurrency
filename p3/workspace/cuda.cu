@@ -26,7 +26,7 @@ int main(int argc, char **argv) {
   
   // get algorithm props
   
-  unordered_set<string> flags{"-c"};
+  unordered_set<string> flags{"-c", "-q"};
   unordered_set<string> opts{"-k", "-d", "-i", "-m", "-t", "-s"};
   unordered_map<string, string> args = parse_args(argc, argv, flags, opts);
   P.clusters = stoi(args["-k"]);
@@ -118,23 +118,29 @@ int main(int argc, char **argv) {
   } while(!(iter == P.iterations || conv_host));
   
   auto t1 = chrono::system_clock::now();
+  long elapsed = (long)((t1 - t0) / chrono::microseconds(1));
+  printf("%ld\n", elapsed / iter);
+  /*
+  auto t1 = chrono::system_clock::now();
   double elapsed = (double)((t1 - t0) / chrono::milliseconds(1));
   printf("%d,%.5lf\n", iter, elapsed / iter);
-  
-  if(P.output_centroids) {
-    if(cudaMemcpy(&centroids_host[0], centroids, centroids_size, cudaMemcpyDeviceToHost)) return -1;
-    for (int c = 0; c < P.clusters; c ++){
-      printf("%d ", c);
-      for (int d = 0; d < P.dims; d++)
-	printf("%.5lf ", centroids_host[c * P.dims + d]);
-      printf("\n");
+  if(!args.count("-q")) {  
+    if(P.output_centroids) {
+      if(cudaMemcpy(&centroids_host[0], centroids, centroids_size, cudaMemcpyDeviceToHost)) return -1;
+      for (int c = 0; c < P.clusters; c ++){
+	printf("%d ", c);
+	for (int d = 0; d < P.dims; d++)
+	  printf("%.5lf ", centroids_host[c * P.dims + d]);
+	printf("\n");
+      }
+    } else {
+      if(cudaMemcpy(&labels_host[0], labels, labels_size, cudaMemcpyDeviceToHost)) return -1;
+      printf("clusters:");
+      for (int p = 0; p < P.points; p++)
+	printf(" %d", labels_host[p]);
     }
-  } else {
-    if(cudaMemcpy(&labels_host[0], labels, labels_size, cudaMemcpyDeviceToHost)) return -1;
-    printf("clusters:");
-    for (int p = 0; p < P.points; p++)
-      printf(" %d", labels_host[p]);
   }
+  */
   cudaFree(features);
   cudaFree(centroids);
   cudaFree(labels);
