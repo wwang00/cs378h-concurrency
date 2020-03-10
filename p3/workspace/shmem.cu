@@ -9,7 +9,7 @@
 #include <vector>
 
 #include "argparse.h"
-#include "cuda_util.h"
+#include "shmem_util.h"
 #include "rng.h"
 
 using namespace std;
@@ -98,12 +98,13 @@ int main(int argc, char **argv) {
     
     if(cudaMemset(counts, 0, counts_size)) return -1;
     if(cudaMemset(totals, 0, totals_size)) return -1;
-    centroid_calculator<<<BLOCKS, TPB>>>(P,
-					 features,
-					 centroids,
-					 labels,
-					 counts,
-					 totals);
+    centroid_calculator<<<BLOCKS, TPB>>>
+      (P,
+       features,
+       centroids,
+       labels,
+       counts,
+       totals);
     cudaDeviceSynchronize();
     
     // update centroids and check convergence

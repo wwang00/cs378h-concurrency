@@ -1,9 +1,9 @@
 CC = g++ -O3
-NVCC = nvcc -arch=sm_60
+NVCC = nvcc -arch=sm_61
 OBJS = argparse.o rng.o
 
-N = 2048
-DIMS = 16
+N = 65536
+DIMS = 32
 INPUT = ../input/n$(N)-d$(DIMS).txt
 
 seq : seq.o $(OBJS)
@@ -15,6 +15,9 @@ thrust : thrust.o $(OBJS)
 cuda : cuda.o $(OBJS)
 	$(NVCC) -o cuda cuda.o $(OBJS)
 
+shmem : shmem.o $(OBJS)
+	$(NVCC) -o shmem shmem.o $(OBJS)
+
 seq.o :
 	$(CC) -c seq.cpp
 
@@ -23,6 +26,9 @@ thrust.o:
 
 cuda.o:
 	$(NVCC) -c cuda.cu
+
+shmem.o:
+	$(NVCC) -c shmem.cu
 
 argparse.o : argparse.h
 	$(CC) -c argparse.cpp
@@ -45,6 +51,11 @@ cudatest :
 	make cuda
 	./cuda -k 16 -d $(DIMS) -i $(INPUT) -m 150 -t 1e-5 -s 8675309 -c
 
+.PHONY : shmemtest
+shmemtest :
+	make shmem
+	./shmem -k 16 -d $(DIMS) -i $(INPUT) -m 150 -t 1e-5 -s 8675309 -c
+
 .PHONY : clean
 clean :
-	rm -f seq thrust cuda seq.o thrust.o cuda.o $(OBJS)
+	rm -f seq thrust cuda shmem seq.o thrust.o cuda.o shmem.o $(OBJS)
