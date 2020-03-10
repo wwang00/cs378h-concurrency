@@ -18,12 +18,14 @@ void centroid_calculator(Parameters P,
   int grid_dim = gridDim.x;
   int block_dim = blockDim.x;
   
-  int begin = block * block_dim + thread;
-  int step = grid_dim * block_dim;
+  int begin;
+  int step;
   int end;
   
-  // reset totals to 0
-  
+  // reset global counts, totals
+
+  begin = block * block_dim + thread;
+  step = grid_dim * block_dim;
   end = P.clusters;
   for(int c = begin; c < end; c += step) {
     counts[c] = 0;

@@ -1,6 +1,8 @@
 #ifndef _PARAMS_H_
 #define _PARAMS_H_
 
+//#define DEBUG
+
 struct Parameters {
   int         points;
   int         clusters;

@@ -15,32 +15,45 @@ void centroid_calculator_sh(Parameters P,
 			    int        *counts,
 			    float      *totals) {
   extern __shared__ char sh[];
-  int *counts_sh = (int *)sh;
-  float *totals_sh = (float *)sh + P.clusters;
+  float *centroids_sh = (float *)sh;
 
   int block = blockIdx.x;
   int thread = threadIdx.x;
   int grid_dim = gridDim.x;
   int block_dim = blockDim.x;
-
-  int begin = block * block_dim + thread;
-  int step = grid_dim * block_dim;
+  
+  int begin;
+  int step;
   int end;
   
-  // reset shared counts and totals to 0
-  
+  // copy centroids locally
+
+  begin = thread;
+  step = block_dim;
   end = P.clusters;
   for(int c = begin; c < end; c += step) {
-    counts_sh[c] = 0;
     for(int d = 0; d < P.dims; d++) {
       int idx = c * P.dims + d;
-      totals_sh[idx] = 0;
+      centroids_sh[idx] = centroids[idx];
     }
   }
   __syncthreads();
 
-  // compute shared totals
+  // reset global counts, totals
+
+  begin = block * block_dim + thread;
+  step = grid_dim * block_dim;
+  end = P.clusters;
+  for(int c = begin; c < end; c += step) {
+    counts[c] = 0;
+    for(int d = 0; d < P.dims; d++) {
+      int idx = c * P.dims + d;
+      totals[idx] = 0;
+    }
+  }
   
+  // work on points
+
   end = P.points;
   for(int p = begin; p < end; p += step) {
     int closest;
@@ -48,7 +61,7 @@ void centroid_calculator_sh(Parameters P,
     for(int c = 0; c < P.clusters; c++) {
       float dist_sq = 0;
       for(int d = 0; d < P.dims; d++) {
-	float diff = features[p * P.dims + d] - centroids[c * P.dims + d];
+	float diff = features[p * P.dims + d] - centroids_sh[c * P.dims + d];
 	dist_sq += diff * diff;
       }
       if(dist_sq < min_dist_sq) {
@@ -57,21 +70,9 @@ void centroid_calculator_sh(Parameters P,
       }
     }
     labels[p] = closest;
-    atomicAdd(counts_sh + closest, 1);
+    atomicAdd(counts + closest, 1);
     for(int d = 0; d < P.dims; d++) {
-      atomicAdd(totals_sh + (closest * P.dims + d), features[p * P.dims + d]);
-    }
-  }
-  __syncthreads();
-
-  // copy into global mem
-
-  end = P.clusters;
-  for(int c = begin; c < end; c += step) {
-    counts[c] = counts_sh[c];
-    for(int d = 0; d < P.dims; d++) {
-      int idx = c * P.dims + d;
-      totals[idx] = totals_sh[idx];
+      atomicAdd(totals + (closest * P.dims + d), features[p * P.dims + d]);
     }
   }
 }
@@ -82,26 +83,58 @@ void centroid_updater_sh(Parameters P,
 			 int        *counts,
 			 float      *totals,
 			 bool       *conv) {
+  extern __shared__ char sh[];
+  float *centroids_sh = (float *)sh;
+
   int block = blockIdx.x;
   int thread = threadIdx.x;
   int grid_dim = gridDim.x;
   int block_dim = blockDim.x;
   
-  int begin = block * block_dim + thread;
-  int step = grid_dim * block_dim;
-  int end = P.clusters;
+  int begin;
+  int step;
+  int end;
   
+  // copy centroids locally
+
+  begin = thread;
+  step = block_dim;
+  end = P.clusters;
+  for(int c = begin; c < end; c += step) {
+    for(int d = 0; d < P.dims; d++) {
+      int idx = c * P.dims + d;
+      centroids_sh[idx] = centroids[idx];
+    }
+  }
+  __syncthreads();
+
+  // compute new centroids
+
+  begin = block * block_dim + thread;
+  step = grid_dim * block_dim;
   for(int c = begin; c < end; c += step) {
     int count = counts[c];
     if(count > 0) {
       for(int d = 0; d < P.dims; d++) {
 	int i = c * P.dims + d;
 	float new_val = totals[i] / count;
-	float diff = centroids[i]  - new_val;
+	float diff = centroids_sh[i]  - new_val;
 	if(diff < -P.threshold || diff > P.threshold)
 	  *conv = false;
-	centroids[i] = new_val;
+	centroids_sh[i] = new_val;
       }
+    }
+  }
+  __syncthreads();
+
+  // store to global
+
+  begin = thread;
+  step = block_dim;
+  for(int c = begin; c < end; c += step) {
+    for(int d = 0; d < P.dims; d++) {
+      int idx = c * P.dims + d;
+      centroids[idx] = centroids_sh[idx];
     }
   }
 }  

@@ -101,7 +101,9 @@ int main(int argc, char **argv) {
     
     // calculate centroid totals
 
-    if(P.clusters * (P.dims + 1) * sizeof(float) < SH_SZ) {
+    int cap = P.clusters * (P.dims) * sizeof(float);
+
+    if(cap > SH_SZ) {
       centroid_calculator<<<BLOCKS, TPB>>>
 	(P,
 	 features,
@@ -122,7 +124,7 @@ int main(int argc, char **argv) {
 
     // update centroids and check convergence
 
-    if(P.clusters * (P.dims + 1) * sizeof(float) < SH_SZ) {
+    if(cap > SH_SZ) {
       centroid_updater<<<BLOCKS, TPB>>>
 	(P,
 	 centroids,
@@ -140,11 +142,11 @@ int main(int argc, char **argv) {
     cudaDeviceSynchronize();
     if(cudaMemcpy(&conv_host, conv, sizeof(bool), cudaMemcpyDeviceToHost)) return -1;
   } while(!(iter == P.iterations || conv_host));
-
+#ifdef DEBUG
   auto t1 = chrono::system_clock::now();
   long elapsed = (long)((t1 - t0) / chrono::microseconds(1));
   printf("%ld\n", elapsed / iter);
-  /*
+#else
   auto t1 = chrono::system_clock::now();
   float elapsed = (float)((t1 - t0) / chrono::milliseconds(1));
   printf("%d,%.5f\n", iter, elapsed / iter);
@@ -162,7 +164,7 @@ int main(int argc, char **argv) {
     for (int p = 0; p < P.points; p++)
       printf(" %d", labels_host[p]);
   }
-  */
+#endif
   cudaFree(features);
   cudaFree(centroids);
   cudaFree(labels);

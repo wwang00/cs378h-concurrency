@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "argparse.h"
+#include "params.h"
 #include "rng.h"
 
 using namespace std;
@@ -109,11 +110,11 @@ int main(int argc, char **argv) {
       }
     }
   } while(!(iter == _iterations || conv));
-
+#ifdef DEBUG
   auto t1 = chrono::system_clock::now();
   long elapsed = (long)((t1 - t0) / chrono::microseconds(1));
   printf("%ld\n", elapsed / iter);
-  /*
+#else
   auto t1 = chrono::system_clock::now();
   float elapsed = (float)((t1 - t0) / chrono::milliseconds(1));
   printf("%d,%.5f\n", iter, elapsed / iter);
@@ -130,7 +131,7 @@ int main(int argc, char **argv) {
     for (int p = 0; p < _points; p++)
       printf(" %d", labels[p]);
   }
-  */
+#endif
   fin.close();
   return 0;
 }
