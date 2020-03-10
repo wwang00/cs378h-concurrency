@@ -101,7 +101,7 @@ int main(int argc, char **argv) {
     
     // calculate centroid totals
 
-    int cap = P.clusters * (2 * P.dims + 1) * sizeof(float);
+    int cap = P.clusters * (P.dims) * sizeof(float);
 
     if(cap > SH_SZ) {
       centroid_calculator<<<BLOCKS, TPB>>>
