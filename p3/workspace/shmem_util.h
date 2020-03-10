@@ -3,9 +3,9 @@
 
 #include "params.h"
 
-#define BLOCKS 16
-#define TPB    128
-#define SH_SZ  0xc000
+#define BLOCKS 64
+#define TPB    64
+#define SH_SZ  0x4000
 
 __global__
 void centroid_calculator(Parameters P,
@@ -14,33 +14,32 @@ void centroid_calculator(Parameters P,
 			 int        *labels,
 			 int        *counts,
 			 double     *totals) {
-  __shared__ double features_sh[SH_SZ / sizeof(double)];
+  // put features into shared
+  const int sh_len = SH_SZ / sizeof(double);
+  __shared__ double sh[sh_len];
 
-  int features_pts = P.points;
-  int features_sh_pts = SH_SZ / (P.dims * sizeof(double));
+  int sh_pts = sh_len / P.dims;
+  int pts = P.points;
 
   int block = blockIdx.x;
   int thread = threadIdx.x;
   int grid_dim = gridDim.x;
   int block_dim = blockDim.x;
 
-  int step = grid_dim * block_dim;
+  // iterate over shared windows
+  for(int base = block * sh_pts; base < pts; base += grid_dim * sh_pts) {
+    int begin = base + thread;
+    int end = base + sh_pts;
+    if(end > pts) end = pts;
 
-  // iterate over windows
-  for(int base = 0; base < features_pts; base += features_sh_pts) {
-    int offset = block * block_dim + thread;
-    int begin = base + offset;
-    int end = base + features_sh_pts;
-    if(end > features_pts) end = features_pts;
-
-    for(int p = begin; p < end; p += step) {
+    for(int p = begin; p < end; p += block_dim) {
+      int sh_idx = (p - base) * P.dims;
+      int idx = p * P.dims;
 
       // copy features into shared
       
-      int features_sh_idx = (p - base) * P.dims;
-      int features_idx = p * P.dims;
       for(int d = 0; d < P.dims; d++) {
-	features_sh[features_sh_idx + d] = features[features_idx + d];
+	sh[sh_idx + d] = features[idx + d];
       }
 
       // do work in shared
@@ -50,7 +49,7 @@ void centroid_calculator(Parameters P,
       for(int c = 0; c < P.clusters; c++) {
 	double dist_sq = 0;
 	for(int d = 0; d < P.dims; d++) {
-	  double diff = features_sh[features_sh_idx + d] - centroids[c * P.dims + d];
+	  double diff = sh[sh_idx + d] - centroids[c * P.dims + d];
 	  dist_sq += diff * diff;
 	}
 	if(dist_sq < min_dist_sq) {
@@ -61,7 +60,7 @@ void centroid_calculator(Parameters P,
       labels[p] = closest;
       atomicAdd(counts + closest, 1);
       for(int d = 0; d < P.dims; d++) {
-	atomicAdd(totals + (closest * P.dims + d), features_sh[features_sh_idx + d]);
+	atomicAdd(totals + (closest * P.dims + d), sh[sh_idx + d]);
       }
     }
   }
