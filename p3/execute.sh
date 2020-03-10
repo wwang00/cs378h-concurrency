@@ -17,7 +17,7 @@ for prog in $PROGS; do
 done
 cd ..
 
-rm output/*
+rm output/*.data
 
 for (( cfg = 0; cfg < CFGS; cfg++ )); do
     for prog in $PROGS; do

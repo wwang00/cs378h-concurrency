@@ -3,9 +3,7 @@
 
 #include "params.h"
 
-#define BLOCKS 64
-#define TPB    64
-#define SH_SZ  0x4000
+#define SH_SZ  0xc000
 
 __global__
 void centroid_calculator(Parameters P,

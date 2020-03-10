@@ -27,7 +27,7 @@ int main(int argc, char **argv) {
   // get algorithm props
   
   unordered_set<string> flags{"-c", "-q"};
-  unordered_set<string> opts{"-k", "-d", "-i", "-m", "-t", "-s"};
+  unordered_set<string> opts{"-k", "-d", "-i", "-m", "-t", "-s", "-blks", "-tpb"};
   unordered_map<string, string> args = parse_args(argc, argv, flags, opts);
   P.clusters = stoi(args["-k"]);
   P.dims = stoi(args["-d"]);
@@ -38,6 +38,9 @@ int main(int argc, char **argv) {
   P.seed = stoi(args["-s"]);
   ifstream fin(input_file);
   fin >> P.points;
+
+  int blocks = stoi(args["-blks"]);
+  int tpb = stoi(args["-tpb"]);
   
   // read in points
   
@@ -98,7 +101,7 @@ int main(int argc, char **argv) {
     
     if(cudaMemset(counts, 0, counts_size)) return -1;
     if(cudaMemset(totals, 0, totals_size)) return -1;
-    centroid_calculator<<<BLOCKS, TPB>>>(P,
+    centroid_calculator<<<blocks, tpb>>>(P,
 					 features,
 					 centroids,
 					 labels,
@@ -108,7 +111,7 @@ int main(int argc, char **argv) {
     
     // update centroids and check convergence
     
-    centroid_updater<<<BLOCKS, TPB>>>(P,
+    centroid_updater<<<blocks, tpb>>>(P,
 				      centroids,
 				      counts,
 				      totals,

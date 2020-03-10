@@ -3,9 +3,6 @@
 
 #include "params.h"
 
-#define BLOCKS 64
-#define TPB    64
-
 __global__
 void centroid_calculator(Parameters P,
 			 double     *features,
