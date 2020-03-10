@@ -8,11 +8,11 @@
 
 __global__
 void centroid_calculator(Parameters P,
-			 double     *features,
-			 double     *centroids,
+			 float      *features,
+			 float      *centroids,
 			 int        *labels,
 			 int        *counts,
-			 double     *totals) {
+			 float      *totals) {
   int block = blockIdx.x;
   int thread = threadIdx.x;
   int grid_dim = gridDim.x;
@@ -20,15 +20,29 @@ void centroid_calculator(Parameters P,
   
   int begin = block * block_dim + thread;
   int step = grid_dim * block_dim;
-  int end = P.points;
+  int end;
   
+  // reset totals to 0
+  
+  end = P.clusters;
+  for(int c = begin; c < end; c += step) {
+    counts[c] = 0;
+    for(int d = 0; d < P.dims; d++) {
+      totals[c * P.dims + d] = 0;
+    }
+  }
+  __syncthreads();
+  
+  // work on points
+  
+  end = P.points;
   for(int p = begin; p < end; p += step) {
     int closest;
-    double min_dist_sq = 1e9;
+    float min_dist_sq = 1e9;
     for(int c = 0; c < P.clusters; c++) {
-      double dist_sq = 0;
+      float dist_sq = 0;
       for(int d = 0; d < P.dims; d++) {
-	double diff = features[p * P.dims + d] - centroids[c * P.dims + d];
+	float diff = features[p * P.dims + d] - centroids[c * P.dims + d];
 	dist_sq += diff * diff;
       }
       if(dist_sq < min_dist_sq) {
@@ -46,9 +60,9 @@ void centroid_calculator(Parameters P,
 
 __global__
 void centroid_updater(Parameters P,
-		      double     *centroids,
+		      float      *centroids,
 		      int        *counts,
-		      double     *totals,
+		      float      *totals,
 		      bool       *conv) {
   int block = blockIdx.x;
   int thread = threadIdx.x;
@@ -64,8 +78,8 @@ void centroid_updater(Parameters P,
     if(count > 0) {
       for(int d = 0; d < P.dims; d++) {
 	int i = c * P.dims + d;
-	double new_val = totals[i] / count;
-	double diff = centroids[i]  - new_val;
+	float new_val = totals[i] / count;
+	float diff = centroids[i]  - new_val;
 	if(diff < -P.threshold || diff > P.threshold)
 	  *conv = false;
 	centroids[i] = new_val;

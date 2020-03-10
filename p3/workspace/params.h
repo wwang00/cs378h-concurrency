@@ -6,7 +6,7 @@ struct Parameters {
   int         clusters;
   int         dims;
   int         iterations;
-  double      threshold;
+  float       threshold;
   bool        output_centroids;
   int         seed;
 };

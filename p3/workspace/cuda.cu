@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
   P.dims = stoi(args["-d"]);
   string input_file = args["-i"];
   P.iterations = stoi(args["-m"]);
-  P.threshold = stod(args["-t"]);
+  P.threshold = stof(args["-t"]);
   P.output_centroids = args.count("-c");
   P.seed = stoi(args["-s"]);
   ifstream fin(input_file);
@@ -41,22 +41,22 @@ int main(int argc, char **argv) {
 
   // read in points
   
-  vector<double> features_host(P.points * P.dims);
+  vector<float> features_host(P.points * P.dims);
   for(int p = 0; p < P.points; p++) {
     for(int d = -1; d < P.dims; d++) {
-      double val; fin >> val;
+      float val; fin >> val;
       if(d < 0) continue;
       features_host[p * P.dims + d] = val;
     }
   }
-  double *features = 0;
-  size_t features_size = P.points * P.dims * sizeof(double);
+  float *features = 0;
+  size_t features_size = P.points * P.dims * sizeof(float);
   if(cudaMalloc(&features, features_size)) return -1;
   if(cudaMemcpy(features, &features_host[0], features_size, cudaMemcpyHostToDevice)) return -1;
   
   // initialize random centroids
   
-  vector<double> centroids_host(P.clusters * P.dims);
+  vector<float> centroids_host(P.clusters * P.dims);
   kmeans_srand(P.seed);
   for(int c = 0; c < P.clusters; c++) {
     int index = kmeans_rand() % P.points;
@@ -64,8 +64,8 @@ int main(int argc, char **argv) {
 	 features_host.begin() + (index + 1) * P.dims,
 	 centroids_host.begin() + c * P.dims);
   }
-  double *centroids;
-  size_t centroids_size = P.clusters * P.dims * sizeof(double);
+  float *centroids;
+  size_t centroids_size = P.clusters * P.dims * sizeof(float);
   if(cudaMalloc(&centroids, centroids_size)) return -1;
   if(cudaMemcpy(centroids, &centroids_host[0], centroids_size, cudaMemcpyHostToDevice)) return -1;
   
@@ -80,8 +80,8 @@ int main(int argc, char **argv) {
   size_t counts_size = P.clusters * sizeof(int);
   if(cudaMalloc(&counts, counts_size)) return -1;
   
-  double *totals;
-  size_t totals_size = P.clusters * P.dims * sizeof(double);
+  float *totals;
+  size_t totals_size = P.clusters * P.dims * sizeof(float);
   if(cudaMalloc(&totals, totals_size)) return -1;
   
   int iter = 0;
@@ -97,7 +97,7 @@ int main(int argc, char **argv) {
     // calculate centroid totals
     
     if(cudaMemset(counts, 0, counts_size)) return -1;
-    if(cudaMemset(totals, 0, totals_size)) return -1;
+    //if(cudaMemset(totals, 0, totals_size)) return -1;
     centroid_calculator<<<BLOCKS, TPB>>>(P,
 					 features,
 					 centroids,
@@ -116,21 +116,21 @@ int main(int argc, char **argv) {
     cudaDeviceSynchronize();
     if(cudaMemcpy(&conv_host, conv, sizeof(bool), cudaMemcpyDeviceToHost)) return -1;
   } while(!(iter == P.iterations || conv_host));
-  /*
+
   auto t1 = chrono::system_clock::now();
   long elapsed = (long)((t1 - t0) / chrono::microseconds(1));
   printf("%ld\n", elapsed / iter);
-  */
+  /*
   auto t1 = chrono::system_clock::now();
-  double elapsed = (double)((t1 - t0) / chrono::milliseconds(1));
-  printf("%d,%.5lf\n", iter, elapsed / iter);
+  float elapsed = (float)((t1 - t0) / chrono::milliseconds(1));
+  printf("%d,%.5f\n", iter, elapsed / iter);
 
   if(P.output_centroids) {
     if(cudaMemcpy(&centroids_host[0], centroids, centroids_size, cudaMemcpyDeviceToHost)) return -1;
     for (int c = 0; c < P.clusters; c ++){
       printf("%d ", c);
       for (int d = 0; d < P.dims; d++)
-	printf("%.5lf ", centroids_host[c * P.dims + d]);
+	printf("%.5f ", centroids_host[c * P.dims + d]);
       printf("\n");
     }
   } else {
@@ -139,7 +139,7 @@ int main(int argc, char **argv) {
     for (int p = 0; p < P.points; p++)
       printf(" %d", labels_host[p]);
   }
-
+  */
   cudaFree(features);
   cudaFree(centroids);
   cudaFree(labels);

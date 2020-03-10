@@ -18,12 +18,12 @@ int    _clusters;
 int    _dims;
 string _input_file;
 int    _iterations;
-double _threshold;
+float _threshold;
 bool   _output_centroids;
 int    _seed;
 
-vector<double> features;
-vector<double> centroids;
+vector<float> features;
+vector<float> centroids;
 vector<int> labels;
 
 int main(int argc, char **argv) {
@@ -34,13 +34,13 @@ int main(int argc, char **argv) {
   _dims = stoi(args["-d"]);
   _input_file = args["-i"];
   _iterations = stoi(args["-m"]);
-  _threshold = stod(args["-t"]);
+  _threshold = stof(args["-t"]);
   _output_centroids = args.count("-c");
   _seed = stoi(args["-s"]);
   ifstream fin(_input_file);
   fin >> _points;
   for(int i = 0; i < _points * (_dims + 1); i++) {
-    double d; fin >> d;
+    float d; fin >> d;
     if(i % (_dims + 1) == 0) continue;
     features.push_back(d);
   }
@@ -71,14 +71,14 @@ int main(int argc, char **argv) {
     // calculate centroid totals
     
     vector<int> counts(_clusters, 0);
-    vector<double> totals(_clusters * _dims, 0);
+    vector<float> totals(_clusters * _dims, 0);
     for(int p = 0; p < _points; p++) {
       int closest;
-      double min_dist_sq = 1e9;
+      float min_dist_sq = 1e9;
       for(int c = 0; c < _clusters; c++) {
-	double dist_sq = 0;
+	float dist_sq = 0;
 	for(int d = 0; d < _dims; d++) {
-	  double diff = features[p * _dims + d] - centroids[c * _dims + d];
+	  float diff = features[p * _dims + d] - centroids[c * _dims + d];
 	  dist_sq += diff * diff;
 	}
 	if(dist_sq < min_dist_sq) {
@@ -100,8 +100,8 @@ int main(int argc, char **argv) {
       if(count > 0) {
 	for(int d = 0; d < _dims; d++) {
 	  int i = c * _dims + d;
-	  double new_val = totals[i] / count;
-	  double diff = centroids[i] - new_val;
+	  float new_val = totals[i] / count;
+	  float diff = centroids[i] - new_val;
 	  if(diff < -_threshold || diff > _threshold)
 	    conv = false;
 	  centroids[i] = new_val;
@@ -109,20 +109,20 @@ int main(int argc, char **argv) {
       }
     }
   } while(!(iter == _iterations || conv));
-  /*
+
   auto t1 = chrono::system_clock::now();
   long elapsed = (long)((t1 - t0) / chrono::microseconds(1));
   printf("%ld\n", elapsed / iter);
-  */
+  /*
   auto t1 = chrono::system_clock::now();
-  double elapsed = (double)((t1 - t0) / chrono::milliseconds(1));
-  printf("%d,%.5lf\n", iter, elapsed / iter);
+  float elapsed = (float)((t1 - t0) / chrono::milliseconds(1));
+  printf("%d,%.5f\n", iter, elapsed / iter);
 
   if(_output_centroids) {
     for (int c = 0; c < _clusters; c ++){
       printf("%d ", c);
       for (int d = 0; d < _dims; d++)
-	printf("%.5lf ", centroids[c * _dims + d]);
+	printf("%.5f ", centroids[c * _dims + d]);
       printf("\n");
     }
   } else {
@@ -130,7 +130,7 @@ int main(int argc, char **argv) {
     for (int p = 0; p < _points; p++)
       printf(" %d", labels[p]);
   }
-
+  */
   fin.close();
   return 0;
 }

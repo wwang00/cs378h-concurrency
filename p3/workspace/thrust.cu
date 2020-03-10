@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
   P.dims = stoi(args["-d"]);
   string input_file = args["-i"];
   P.iterations = stoi(args["-m"]);
-  P.threshold = stod(args["-t"]);
+  P.threshold = stof(args["-t"]);
   P.output_centroids = args.count("-c");
   P.seed = stoi(args["-s"]);
   ifstream fin(input_file);
@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
   h_vec features_host(P.points * P.dims);
   for(int p = 0; p < P.points; p++) {
     for(int d = -1; d < P.dims; d++) {
-      double val; fin >> val;
+      float val; fin >> val;
       if(d < 0) continue;
       features_host[p * P.dims + d] = val;
     }
@@ -97,21 +97,21 @@ int main(int argc, char **argv) {
 		     begin + P.clusters,
 		     centroid_updater{P, centroids.data(), counts.data(), totals.data(), conv});
   } while(!(iter == P.iterations || *conv));
-  /*  
+
   auto t1 = chrono::system_clock::now();
   long elapsed = (long)((t1 - t0) / chrono::microseconds(1));
   printf("%ld\n", elapsed / iter);
-  */
+  /*
   auto t1 = chrono::system_clock::now();
-  double elapsed = (double)((t1 - t0) / chrono::milliseconds(1));
-  printf("%d,%.5lf\n", iter, elapsed / iter);
+  float elapsed = (float)((t1 - t0) / chrono::milliseconds(1));
+  printf("%d,%.5f\n", iter, elapsed / iter);
 
   if(P.output_centroids) {
     thrust::copy(centroids.begin(), centroids.end(), centroids_host.begin());
     for (int c = 0; c < P.clusters; c ++){
       printf("%d ", c);
       for (int d = 0; d < P.dims; d++)
-	printf("%.5lf ", centroids_host[c * P.dims + d]);
+	printf("%.5f ", centroids_host[c * P.dims + d]);
       printf("\n");
     }
   } else {
@@ -120,7 +120,7 @@ int main(int argc, char **argv) {
     for (int p = 0; p < P.points; p++)
       printf(" %d", labels_host[p]);
   }
-
+  */
   thrust::device_free(conv_mem);
   fin.close();
   return 0;

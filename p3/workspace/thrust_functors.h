@@ -34,7 +34,7 @@ struct centroid_calculator {
     // reduce: two centroid indices -> the closer one to the point p
     __device__
     int operator()(const int &a, const int &b) {
-      double da = 0, db = 0, diff;
+      float da = 0, db = 0, diff;
       for(int d = 0; d < P.dims; d++) {
 	diff = centroids[a * P.dims + d] - features[p * P.dims + d];
 	da += diff * diff;
@@ -55,7 +55,7 @@ struct centroid_calculator {
     // add point coordinate to closest centroid coordinate atomically
     __device__
     void operator()(const int d) {
-      atomicAdd((totals + (c * P.dims + d)).get(), (double)features[p * P.dims + d]);
+      atomicAdd((totals + (c * P.dims + d)).get(), (float)features[p * P.dims + d]);
     }
   };
   
@@ -96,8 +96,8 @@ struct centroid_updater {
     // for_each: take total / count = avg and put it into centroids; check converged
     __host__ __device__
     void operator()(const int i) {
-      double new_val = totals[i] / count;
-      double diff = centroids[i] - new_val;
+      float new_val = totals[i] / count;
+      float diff = centroids[i] - new_val;
       if(diff < -P.threshold || diff > P.threshold)
 	*conv = false;
       centroids[i] = new_val;
