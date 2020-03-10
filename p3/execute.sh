@@ -1,7 +1,7 @@
 #!/bin/bash
 
 REPS=20
-PROGS="shmem"
+PROGS="seq thrust cuda"
 CFGS=3
 N=(2048 16384 65536)
 D=(16 24 32)
@@ -18,7 +18,6 @@ done
 cd ..
 
 rm output/*.data
-
 
 for prog in $PROGS; do
     for (( i = 0; i < REPS; i++ )); do
