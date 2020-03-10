@@ -97,31 +97,30 @@ int main(int argc, char **argv) {
 		     begin + P.clusters,
 		     centroid_updater{P, centroids.data(), counts.data(), totals.data(), conv});
   } while(!(iter == P.iterations || *conv));
-  
+  /*  
   auto t1 = chrono::system_clock::now();
   long elapsed = (long)((t1 - t0) / chrono::microseconds(1));
   printf("%ld\n", elapsed / iter);
-  /*
+  */
   auto t1 = chrono::system_clock::now();
   double elapsed = (double)((t1 - t0) / chrono::milliseconds(1));
   printf("%d,%.5lf\n", iter, elapsed / iter);
-  if(!args.count("-q")) {  
-    if(P.output_centroids) {
-      thrust::copy(centroids.begin(), centroids.end(), centroids_host.begin());
-      for (int c = 0; c < P.clusters; c ++){
-	printf("%d ", c);
-	for (int d = 0; d < P.dims; d++)
-	  printf("%.5lf ", centroids_host[c * P.dims + d]);
-	printf("\n");
-      }
-    } else {
-      thrust::copy(labels.begin(), labels.end(), labels_host.begin());
-      printf("clusters:");
-      for (int p = 0; p < P.points; p++)
-	printf(" %d", labels_host[p]);
+
+  if(P.output_centroids) {
+    thrust::copy(centroids.begin(), centroids.end(), centroids_host.begin());
+    for (int c = 0; c < P.clusters; c ++){
+      printf("%d ", c);
+      for (int d = 0; d < P.dims; d++)
+	printf("%.5lf ", centroids_host[c * P.dims + d]);
+      printf("\n");
     }
+  } else {
+    thrust::copy(labels.begin(), labels.end(), labels_host.begin());
+    printf("clusters:");
+    for (int p = 0; p < P.points; p++)
+      printf(" %d", labels_host[p]);
   }
-  */
+
   thrust::device_free(conv_mem);
   fin.close();
   return 0;

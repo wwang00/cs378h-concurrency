@@ -116,11 +116,15 @@ int main(int argc, char **argv) {
     cudaDeviceSynchronize();
     if(cudaMemcpy(&conv_host, conv, sizeof(bool), cudaMemcpyDeviceToHost)) return -1;
   } while(!(iter == P.iterations || conv_host));
-  
+  /*
   auto t1 = chrono::system_clock::now();
   long elapsed = (long)((t1 - t0) / chrono::microseconds(1));
   printf("%ld\n", elapsed / iter);
-  /*
+  */
+  auto t1 = chrono::system_clock::now();
+  double elapsed = (double)((t1 - t0) / chrono::milliseconds(1));
+  printf("%d,%.5lf\n", iter, elapsed / iter);
+
   if(P.output_centroids) {
     if(cudaMemcpy(&centroids_host[0], centroids, centroids_size, cudaMemcpyDeviceToHost)) return -1;
     for (int c = 0; c < P.clusters; c ++){
@@ -135,12 +139,7 @@ int main(int argc, char **argv) {
     for (int p = 0; p < P.points; p++)
       printf(" %d", labels_host[p]);
   }
-  */
-  /*
-  auto t1 = chrono::system_clock::now();
-  double elapsed = (double)((t1 - t0) / chrono::milliseconds(1));
-  printf("%d,%.5lf\n", iter, elapsed / iter);
-  */
+
   cudaFree(features);
   cudaFree(centroids);
   cudaFree(labels);

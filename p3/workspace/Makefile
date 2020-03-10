@@ -2,8 +2,9 @@ CC = g++ -O3
 NVCC = nvcc -arch=sm_61
 OBJS = argparse.o rng.o
 
-N = 65536
-DIMS = 32
+N = 101
+DIMS = 23
+K = 11
 INPUT = ../input/n$(N)-d$(DIMS).txt
 
 seq : seq.o $(OBJS)
@@ -39,22 +40,22 @@ rng.o : rng.h
 .PHONY : seqtest
 seqtest :
 	make seq
-	./seq -k 16 -d $(DIMS) -i $(INPUT) -m 150 -t 1e-5 -s 8675309 -c
+	./seq -k $(K) -d $(DIMS) -i $(INPUT) -m 150 -t 1e-5 -s 8675309 -c
 
 .PHONY : thrusttest
 thrusttest :
 	make thrust
-	./thrust -k 16 -d $(DIMS) -i $(INPUT) -m 150 -t 1e-5 -s 8675309 -c
+	./thrust -k $(K) -d $(DIMS) -i $(INPUT) -m 150 -t 1e-5 -s 8675309 -c
 
 .PHONY : cudatest
 cudatest :
 	make cuda
-	./cuda -k 16 -d $(DIMS) -i $(INPUT) -m 150 -t 1e-5 -s 8675309 -c
+	./cuda -k $(K) -d $(DIMS) -i $(INPUT) -m 150 -t 1e-5 -s 8675309 -c
 
 .PHONY : shmemtest
 shmemtest :
 	make shmem
-	./shmem -k 16 -d $(DIMS) -i $(INPUT) -m 150 -t 1e-5 -s 8675309 -c
+	./shmem -k $(K) -d $(DIMS) -i $(INPUT) -m 150 -t 1e-5 -s 8675309 -c
 
 .PHONY : clean
 clean :
