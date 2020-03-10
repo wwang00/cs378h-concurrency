@@ -1,7 +1,7 @@
 #!/bin/bash
 
 REPS=20
-PROGS="seq thrust cuda"
+PROGS="shmem"
 CFGS=3
 N=(2048 16384 65536)
 D=(16 24 32)
