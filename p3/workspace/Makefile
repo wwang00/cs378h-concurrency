@@ -2,9 +2,9 @@ CC = g++ -O3
 NVCC = nvcc -arch=sm_61
 OBJS = argparse.o rng.o
 
-N = 101
-DIMS = 23
-K = 11
+N = 65536
+DIMS = 32
+K = 16
 INPUT = ../input/n$(N)-d$(DIMS).txt
 
 seq : seq.o $(OBJS)
