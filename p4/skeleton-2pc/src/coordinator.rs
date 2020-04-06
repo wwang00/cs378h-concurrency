@@ -176,12 +176,9 @@ impl Coordinator {
     /// transaction requests made by this coordinator before exiting.
     ///
     pub fn report_status(&self) {
-        let successful_ops: usize = 0; // TODO!
-        let failed_ops: usize = 0; // TODO!
-        let unknown_ops: usize = 0; // TODO!
         println!(
             "coordinator:\tC:{}\tA:{}\tU:{}",
-            successful_ops, failed_ops, unknown_ops
+            self.committed, self.aborted, self.unknown
         );
     }
 
@@ -251,9 +248,11 @@ impl Coordinator {
             let mtype: MessageType;
             let state: CoordinatorState;
             if commit {
+                self.committed += 1;
                 mtype = MessageType::CoordinatorCommit;
                 state = CoordinatorState::Commit;
             } else {
+                self.aborted += 1;
                 mtype = MessageType::CoordinatorAbort;
                 state = CoordinatorState::Abort;
             }

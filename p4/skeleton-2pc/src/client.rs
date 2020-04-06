@@ -148,13 +148,9 @@ impl Client {
     /// transaction requests made by this client before exiting.
     ///
     pub fn report_status(&self) {
-        // TODO: collect real stats!
-        let successful_ops: usize = 0;
-        let failed_ops: usize = 0;
-        let unknown_ops: usize = 0;
         println!(
             "client_{}:\tC:{}\tA:{}\tU:{}",
-            self.id, successful_ops, failed_ops, unknown_ops
+            self.id, self.committed, self.aborted, self.unknown
         );
     }
 
@@ -165,7 +161,7 @@ impl Client {
     /// HINT: if you've issued all your requests, wait for some kind of
     ///       exit signal before returning from the protocol method!
     ///
-    pub fn protocol(&self, n_requests: i32) {
+    pub fn protocol(&mut self, n_requests: i32) {
         trace!("client_{}::protocol", self.id);
 
         for _ in 0..n_requests {
@@ -179,6 +175,11 @@ impl Client {
             }
             let result = result.unwrap();
             info!("result {:?}", result);
+            match result.mtype {
+                MessageType::CoordinatorCommit => self.committed += 1,
+                MessageType::CoordinatorAbort => self.aborted += 1,
+                _ => (),
+            }
         }
 
         self.wait_for_exit_signal();

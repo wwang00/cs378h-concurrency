@@ -211,13 +211,9 @@ impl Participant {
     /// transaction requests made by this coordinator before exiting.
     ///
     pub fn report_status(&self) {
-        // TODO: maintain actual stats!
-        let global_successful_ops: usize = 0;
-        let global_failed_ops: usize = 0;
-        let global_unknown_ops: usize = 0;
         println!(
             "participant_{}:\tC:{}\tA:{}\tU:{}",
-            self.id, global_successful_ops, global_failed_ops, global_unknown_ops
+            self.id, self.committed, self.aborted, self.unknown
         );
     }
 
@@ -264,6 +260,11 @@ impl Participant {
 
             // get final decision, update locally
             let decision = self.rx.recv().unwrap();
+            match decision.mtype {
+                MessageType::CoordinatorCommit => self.committed += 1,
+                MessageType::CoordinatorAbort => self.aborted += 1,
+                _ => (),
+            }
             self.log
                 .append(decision.mtype, txid, senderid.clone(), opid);
             self.state = ParticipantState::Quiescent;

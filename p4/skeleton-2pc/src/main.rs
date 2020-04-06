@@ -100,7 +100,7 @@ fn register_participants(
 /// create a thread per client to run the client
 ///
 fn launch_clients(clients: Vec<Client>, n_requests: i32, handles: &mut Vec<JoinHandle<()>>) {
-    for client in clients {
+    for mut client in clients {
         let handle = thread::spawn(move || {
             client.protocol(n_requests);
         });
