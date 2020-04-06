@@ -100,10 +100,9 @@ fn register_participants(
 /// create a thread per client to run the client
 ///
 fn launch_clients(clients: Vec<Client>, n_requests: i32, handles: &mut Vec<JoinHandle<()>>) {
-    for mut client in clients {
+    for client in clients {
         let handle = thread::spawn(move || {
             client.protocol(n_requests);
-            trace!("client terminating");
         });
         handles.push(handle);
     }
@@ -113,19 +112,11 @@ fn launch_clients(clients: Vec<Client>, n_requests: i32, handles: &mut Vec<JoinH
 /// launch_participants()
 ///
 /// create a thread per participant to run the participant
-/// part of the 2PC protocol. Somewhere in each of the threads created
-/// here, there should be a call to Participant::participate(...).
-///
-/// <params>
-/// participants: a vector of Participant structs
-/// handles: (optional depending on design) -- a mutable vector
-///    to return wait handles to the caller
 ///
 fn launch_participants(participants: Vec<Participant>, handles: &mut Vec<JoinHandle<()>>) {
     for mut participant in participants {
         let handle = thread::spawn(move || {
             participant.protocol();
-            trace!("participant terminating");
         });
         handles.push(handle);
     }
@@ -170,14 +161,12 @@ fn run(opts: &tpcoptions::TPCOptions) {
 
     // init coordinator
     let logpath = format!("{}/coordinator.log", opts.logpath);
-    trace!("coordinator logpath {}", logpath);
     coordinator = Coordinator::new(
         running.clone(),
         logpath,
         opts.success_probability_ops,
         opts.success_probability_msg,
         opts.num_clients,
-        opts.num_requests,
         opts.num_participants,
     );
 
@@ -195,13 +184,13 @@ fn run(opts: &tpcoptions::TPCOptions) {
     );
 
     // launch
-    let coordinator_handle = thread::spawn(move || {
-        coordinator.protocol();
-        trace!("coordinator terminating");
-    });
-    handles.push(coordinator_handle);
     launch_participants(participants, &mut handles);
     launch_clients(clients, opts.num_requests, &mut handles);
+    let coordinator_handle = thread::spawn(move || {
+        coordinator.protocol();
+        trace!("coordinator terminated");
+    });
+    handles.push(coordinator_handle);
 
     // wait
     for handle in handles {

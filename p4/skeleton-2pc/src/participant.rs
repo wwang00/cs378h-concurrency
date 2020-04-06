@@ -26,6 +26,7 @@ use std::time::Duration;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ParticipantState {
     Quiescent,
+    Armed,
     Ready,
     Abort,
     Commit,
@@ -47,7 +48,13 @@ pub struct Participant {
     success_prob_msg: f64,
     tx: Sender<ProtocolMessage>,
     rx: Receiver<ProtocolMessage>,
+    committed: i32,
+    aborted: i32,
+    unknown: i32,
 }
+
+// static timeout for receiving result from coordinator
+static TIMEOUT: Duration = Duration::from_millis(500);
 
 ///
 /// Participant
@@ -91,6 +98,9 @@ impl Participant {
             success_prob_msg,
             tx,
             rx,
+            committed: 0,
+            aborted: 0,
+            unknown: 0,
         }
     }
 
@@ -104,9 +114,11 @@ impl Participant {
     /// HINT: you will need to implement something that does the
     ///       actual sending.
     ///
-    pub fn send(&mut self, pm: ProtocolMessage) -> bool {
+    pub fn send(&self, pm: ProtocolMessage) -> bool {
+        trace!("participant_{}::send...", self.id);
         let result: bool = true;
         self.tx.send(pm).unwrap();
+        trace!("participant_{}::send exit", self.id);
         result
     }
 
@@ -121,7 +133,7 @@ impl Participant {
     ///       actual sending, but you can use the threshold
     ///       logic in this implementation below.
     ///
-    pub fn send_unreliable(&mut self, pm: ProtocolMessage) -> bool {
+    pub fn send_unreliable(&self, pm: ProtocolMessage) -> bool {
         let x: f64 = random();
         let result: bool;
         if x < self.success_prob_msg {
@@ -129,6 +141,24 @@ impl Participant {
         } else {
             result = false;
         }
+        result
+    }
+
+    ///
+    /// recv_request()
+    /// receive a message from coordinator
+    ///
+    pub fn recv_request(&self) -> Option<ProtocolMessage> {
+        trace!("participant_{}::recv_request...", self.id);
+        let mut result = Option::None;
+        assert!(self.state == ParticipantState::Quiescent);
+
+        let received = self.rx.try_recv();
+        if let Ok(pm) = received {
+            info!("\treceived {:?}", pm);
+            result = Some(pm);
+        }
+        trace!("participant_{}::recv_request exit", self.id);
         result
     }
 
@@ -144,18 +174,35 @@ impl Participant {
     ///       (it's ok to add parameters or return something other than
     ///       bool if it's more convenient for your design).
     ///
-    pub fn perform_operation(&mut self, request: &Option<ProtocolMessage>) -> bool {
-        trace!("participant::perform_operation");
+    pub fn perform_operation(&self) -> bool {
+        trace!("participant_{}::perform_operation", self.id);
+        assert!(self.state == ParticipantState::Armed);
 
         let mut result: RequestStatus = RequestStatus::Unknown;
 
         let x: f64 = random();
         if x < self.success_prob_ops {
+            info!("\tsuccess");
             result = RequestStatus::Committed;
+        } else {
+            info!("\tfailure");
         }
 
-        trace!("exit participant::perform_operation");
+        trace!("participant_{}::perform_operation exit", self.id);
         result == RequestStatus::Committed
+    }
+
+    ///
+    /// wait_for_exit_signal(&mut self)
+    /// wait until the running flag is set by the CTRL-C handler
+    ///
+    pub fn wait_for_exit_signal(&self) {
+        trace!("participant_{} waiting for exit signal", self.id);
+
+        let stop_msg = self.rx.recv().unwrap();
+        assert!(stop_msg.mtype == MessageType::CoordinatorExit);
+
+        trace!("participant_{} exiting", self.id);
     }
 
     ///
@@ -163,7 +210,7 @@ impl Participant {
     /// report the abort/commit/unknown status (aggregate) of all
     /// transaction requests made by this coordinator before exiting.
     ///
-    pub fn report_status(&mut self) {
+    pub fn report_status(&self) {
         // TODO: maintain actual stats!
         let global_successful_ops: usize = 0;
         let global_failed_ops: usize = 0;
@@ -175,18 +222,6 @@ impl Participant {
     }
 
     ///
-    /// wait_for_exit_signal(&mut self)
-    /// wait until the running flag is set by the CTRL-C handler
-    ///
-    pub fn wait_for_exit_signal(&mut self) {
-        trace!("participant_{} waiting for exit signal", self.id);
-
-        while self.running.load(Ordering::SeqCst) {}
-
-        trace!("participant_{} exiting", self.id);
-    }
-
-    ///
     /// protocol()
     /// Implements the participant side of the 2PC protocol
     /// HINT: if the simulation ends early, don't keep handling requests!
@@ -195,9 +230,46 @@ impl Participant {
     pub fn protocol(&mut self) {
         trace!("participant_{}::protocol", self.id);
 
-        // TODO
+        while self.running.load(Ordering::SeqCst) {
+            // get request
+            let request = self.recv_request();
+            if let None = request {
+                continue;
+            }
+            let request = request.unwrap();
+            let txid = request.txid;
+            let senderid = request.senderid.clone();
+            let opid = request.opid;
+            self.state = ParticipantState::Armed;
 
-        self.wait_for_exit_signal();
+            // perform operation
+            let op_success = self.perform_operation();
+            self.state = ParticipantState::Ready;
+
+            // vote
+            let vote: ProtocolMessage;
+            let mtype: MessageType;
+            let state: ParticipantState;
+            if op_success {
+                mtype = MessageType::ParticipantVoteCommit;
+                state = ParticipantState::Commit;
+            } else {
+                mtype = MessageType::ParticipantVoteAbort;
+                state = ParticipantState::Abort;
+            }
+            self.log.append(mtype, txid, senderid.clone(), opid);
+            vote = ProtocolMessage::generate(mtype, txid, senderid.clone(), opid);
+            self.send(vote);
+            self.state = state;
+
+            // get final decision, update locally
+            let decision = self.rx.recv().unwrap();
+            self.log
+                .append(decision.mtype, txid, senderid.clone(), opid);
+            self.state = ParticipantState::Quiescent;
+        }
+
+        // self.wait_for_exit_signal();
         self.report_status();
     }
 }

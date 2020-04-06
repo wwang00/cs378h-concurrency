@@ -18,6 +18,12 @@ use std::time::Duration;
 // static counter for getting unique TXID numbers
 static TXID_COUNTER: AtomicI32 = AtomicI32::new(1);
 
+// static counter for getting unique OPID numbers
+static OPID_COUNTER: AtomicI32 = AtomicI32::new(1);
+
+// static timeout for receiving result from coordinator
+static TIMEOUT: Duration = Duration::from_millis(1000);
+
 // client state and
 // primitives for communicating with
 // the coordinator
@@ -28,6 +34,9 @@ pub struct Client {
     running: Arc<AtomicBool>,
     tx: Sender<ProtocolMessage>,
     rx: Receiver<ProtocolMessage>,
+    committed: i32,
+    aborted: i32,
+    unknown: i32,
 }
 
 ///
@@ -63,48 +72,43 @@ impl Client {
             running,
             tx,
             rx,
+            committed: 0,
+            aborted: 0,
+            unknown: 0,
         }
-    }
-
-    ///
-    /// wait_for_exit_signal(&mut self)
-    /// wait until the running flag is set by the CTRL-C handler
-    ///
-    pub fn wait_for_exit_signal(&mut self) {
-        trace!("client_{} waiting for exit signal", self.id);
-
-        while self.running.load(Ordering::SeqCst) {}
-
-        trace!("client_{} exiting", self.id);
     }
 
     ///
     /// send_next_operation(&mut self)
     /// send the next operation to the coordinator
     ///
-    pub fn send_next_operation(&mut self) {
-        trace!("client_{}::send_next_operation", self.id);
+    pub fn send_next_operation(&self) -> Option<()> {
+        trace!("client_{}::send_next_operation...", self.id);
 
         // create a new request with a unique TXID.
-        let request_no: i32 = 0; // TODO--choose another number!
         let txid = TXID_COUNTER.fetch_add(1, Ordering::SeqCst);
+        let opid = OPID_COUNTER.fetch_add(1, Ordering::SeqCst);
 
         info!(
-            "Client {} request({})->txid:{} called",
-            self.id, request_no, txid
+            "\tclient_{} request({})->txid:{} called",
+            self.id, opid, txid
         );
-        let pm = message::ProtocolMessage::generate(
-            message::MessageType::ClientRequest,
+        let pm = ProtocolMessage::generate(
+            MessageType::ClientRequest,
             txid,
             format!("client_{}", self.id),
-            request_no,
+            opid,
         );
 
-        info!("client {} calling send...", self.id);
+        info!("\tclient_{} calling send...", self.id);
 
-        // TODO
+        let result = self.tx.send(pm);
 
-        trace!("client_{}::exit send_next_operation", self.id);
+        trace!("client_{}::send_next_operation exit", self.id);
+        if let Ok(()) = result {
+            return Some(());
+        }
+        None
     }
 
     ///
@@ -113,12 +117,29 @@ impl Client {
     /// last issued request. Note that we assume the coordinator does
     /// not fail in this simulation
     ///
-    pub fn recv_result(&mut self) {
-        trace!("client_{}::recv_result", self.id);
+    pub fn recv_result(&self) -> Option<ProtocolMessage> {
+        trace!("client_{}::recv_result...", self.id);
+        let mut result = Option::None;
 
-        // TODO
+        let received = self.rx.recv();
+        if let Ok(pm) = received {
+            info!("\treceived {:?}", pm);
+            result = Some(pm);
+        }
+        trace!("client_{}::recv_result exit", self.id);
+        result
+    }
 
-        trace!("client_{}::exit recv_result", self.id);
+    ///
+    /// wait_for_exit_signal(&mut self)
+    /// wait until the running flag is set by the CTRL-C handler
+    ///
+    pub fn wait_for_exit_signal(&self) {
+        trace!("client_{} waiting for exit signal", self.id);
+
+        while self.running.load(Ordering::SeqCst) {}
+
+        trace!("client_{} exiting", self.id);
     }
 
     ///
@@ -126,7 +147,7 @@ impl Client {
     /// report the abort/commit/unknown status (aggregate) of all
     /// transaction requests made by this client before exiting.
     ///
-    pub fn report_status(&mut self) {
+    pub fn report_status(&self) {
         // TODO: collect real stats!
         let successful_ops: usize = 0;
         let failed_ops: usize = 0;
@@ -144,14 +165,24 @@ impl Client {
     /// HINT: if you've issued all your requests, wait for some kind of
     ///       exit signal before returning from the protocol method!
     ///
-    pub fn protocol(&mut self, n_requests: i32) {
-        // run the 2PC protocol for each of n_requests
+    pub fn protocol(&self, n_requests: i32) {
+        trace!("client_{}::protocol", self.id);
 
-        // TODO
+        for _ in 0..n_requests {
+            let result = self.send_next_operation();
+            if let None = result {
+                break;
+            }
+            let result = self.recv_result();
+            if let None = result {
+                break;
+            }
+            let result = result.unwrap();
+            info!("result {:?}", result);
+        }
 
-        // wait for signal to exit
-        // and then report status
         self.wait_for_exit_signal();
         self.report_status();
+        trace!("client_{} exiting", self.id);
     }
 }

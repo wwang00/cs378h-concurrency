@@ -28,6 +28,7 @@ use std::time::Duration;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CoordinatorState {
     Quiescent,
+    Armed,
     Wait,
     Abort,
     Commit,
@@ -43,13 +44,19 @@ pub struct Coordinator {
     success_prob_ops: f64,
     success_prob_msg: f64,
     n_clients: i32,
-    n_requests: i32,
     n_participants: i32,
+    curr_client: i32,
     tx_clients: Vec<Sender<ProtocolMessage>>,
     rx_clients: Vec<Receiver<ProtocolMessage>>,
     tx_participants: Vec<Sender<ProtocolMessage>>,
     rx_participants: Vec<Receiver<ProtocolMessage>>,
+    committed: i32,
+    aborted: i32,
+    unknown: i32,
 }
+
+// static timeout for receiving result from participant
+static TIMEOUT: Duration = Duration::from_millis(500);
 
 ///
 /// Coordinator
@@ -72,7 +79,6 @@ impl Coordinator {
         success_prob_ops: f64,
         success_prob_msg: f64,
         n_clients: i32,
-        n_requests: i32,
         n_participants: i32,
     ) -> Coordinator {
         Coordinator {
@@ -82,22 +88,21 @@ impl Coordinator {
             success_prob_ops,
             success_prob_msg,
             n_clients,
-            n_requests,
             n_participants,
+            curr_client: -1,
             tx_clients: Vec::new(),
             rx_clients: Vec::new(),
             tx_participants: Vec::new(),
             rx_participants: Vec::new(),
+            committed: 0,
+            aborted: 0,
+            unknown: 0,
         }
     }
 
     ///
     /// participant_join()
     /// handle the addition of a new participant
-    /// HINT: keep track of any channels involved!
-    /// HINT: you'll probably need to change this routine's
-    ///       signature to return something!
-    ///       (e.g. channel(s) to be used)
     ///
     pub fn participant_join(&mut self) -> (Sender<ProtocolMessage>, Receiver<ProtocolMessage>) {
         assert!(self.state == CoordinatorState::Quiescent);
@@ -112,17 +117,13 @@ impl Coordinator {
     ///
     /// client_join()
     /// handle the addition of a new client
-    /// HINTS: keep track of any channels involved!
-    /// HINT: you'll probably need to change this routine's
-    ///       signature to return something!
-    ///       (e.g. channel(s) to be used)
     ///
     pub fn client_join(&mut self) -> (Sender<ProtocolMessage>, Receiver<ProtocolMessage>) {
         assert!(self.state == CoordinatorState::Quiescent);
         let (tx_coordinator, rx_client) = channel();
         let (tx_client, rx_coordinator) = channel();
-        self.tx_participants.push(tx_coordinator);
-        self.rx_participants.push(rx_coordinator);
+        self.tx_clients.push(tx_coordinator);
+        self.rx_clients.push(rx_coordinator);
 
         (tx_client, rx_client)
     }
@@ -130,35 +131,42 @@ impl Coordinator {
     ///
     /// send()
     /// send a message, maybe drop it
-    /// HINT: you'll need to do something to implement
-    ///       the actual sending!
     ///
-    pub fn send(&mut self, sender: &Sender<ProtocolMessage>, pm: ProtocolMessage) -> bool {
+    pub fn send(&self, sender: &Sender<ProtocolMessage>, pm: ProtocolMessage) -> bool {
+        trace!("coordinator::send...");
         let x: f64 = random();
         let mut result: bool = true;
-        if x < self.success_prob_ops {
+        if x < self.success_prob_msg {
+            info!("\tsuccess");
             sender.send(pm).unwrap();
         } else {
-            // don't send anything!
-            // (simulates failure)
+            info!("\tfailure");
             result = false;
         }
+        trace!("coordinator::send exit");
         result
     }
 
     ///
     /// recv_request()
     /// receive a message from a client
-    /// to start off the protocol.
     ///
     pub fn recv_request(&mut self) -> Option<ProtocolMessage> {
         let mut result = Option::None;
-        assert!(self.state == CoordinatorState::Quiescent);
         trace!("coordinator::recv_request...");
+        assert!(self.state == CoordinatorState::Quiescent);
 
-        // TODO: write me!
-
-        trace!("leaving coordinator::recv_request");
+        for c in 0..self.n_clients as usize {
+            let rx = &self.rx_clients[c];
+            let received = rx.try_recv();
+            if let Ok(pm) = received {
+                info!("\treceived {:?}", pm);
+                result = Some(pm);
+                self.curr_client = c as i32;
+                break;
+            }
+        }
+        trace!("coordinator::recv_request exit");
         result
     }
 
@@ -167,7 +175,7 @@ impl Coordinator {
     /// report the abort/commit/unknown status (aggregate) of all
     /// transaction requests made by this coordinator before exiting.
     ///
-    pub fn report_status(&mut self) {
+    pub fn report_status(&self) {
         let successful_ops: usize = 0; // TODO!
         let failed_ops: usize = 0; // TODO!
         let unknown_ops: usize = 0; // TODO!
@@ -178,14 +186,92 @@ impl Coordinator {
     }
 
     ///
+    /// signal_exit()
+    /// signal participants and clients to stop
+    ///
+    pub fn signal_exit(&self) {
+        trace!("coordinator sending exit signal");
+
+        let msg = ProtocolMessage::generate(MessageType::CoordinatorExit, -1, String::new(), -1);
+        for c in 0..self.n_clients as usize {
+            let tx = &self.tx_clients[c];
+            tx.send(msg.clone()).unwrap();
+        }
+        for p in 0..self.n_participants as usize {
+            let tx = &self.tx_participants[p];
+            tx.send(msg.clone()).unwrap();
+        }
+
+        thread::sleep(TIMEOUT);
+    }
+
+    ///
     /// protocol()
     /// Implements the coordinator side of the 2PC protocol
     /// HINT: if the simulation ends early, don't keep handling requests!
     /// HINT: wait for some kind of exit signal before returning from the protocol!
     ///
     pub fn protocol(&mut self) {
-        while self.running.load(Ordering::SeqCst) {}
+        trace!("coordinator::protocol");
 
+        while self.running.load(Ordering::SeqCst) {
+            // get request
+            let request = self.recv_request();
+            if let None = request {
+                continue;
+            }
+            let request = request.unwrap();
+            let txid = request.txid;
+            let senderid = request.senderid.clone();
+            let opid = request.opid;
+            self.state = CoordinatorState::Armed;
+
+            // send request to participants
+            let request_msg = ProtocolMessage::generate(
+                MessageType::CoordinatorPropose,
+                txid,
+                senderid.clone(),
+                opid,
+            );
+            for p in 0..self.n_participants as usize {
+                let tx = &self.tx_participants[p];
+                self.send(tx, request_msg.clone());
+            }
+            self.state = CoordinatorState::Wait;
+
+            // get participant votes
+            let mut commit = true;
+            for p in 0..self.n_participants as usize {
+                let rx = &self.rx_participants[p];
+                let vote = rx.recv().unwrap();
+                if vote.mtype != MessageType::ParticipantVoteCommit {
+                    commit = false;
+                }
+            }
+            let mtype: MessageType;
+            let state: CoordinatorState;
+            if commit {
+                mtype = MessageType::CoordinatorCommit;
+                state = CoordinatorState::Commit;
+            } else {
+                mtype = MessageType::CoordinatorAbort;
+                state = CoordinatorState::Abort;
+            }
+            self.log.append(mtype, txid, senderid.clone(), opid);
+            self.state = state;
+
+            // send final decision to participants and result to client
+            let decision_msg = ProtocolMessage::generate(mtype, txid, senderid.clone(), opid);
+            for p in 0..self.n_participants as usize {
+                let tx = &self.tx_participants[p];
+                self.send(tx, decision_msg.clone());
+            }
+            let tx = &self.tx_clients[self.curr_client as usize];
+            self.send(tx, decision_msg.clone());
+            self.state = CoordinatorState::Quiescent;
+        }
+
+        // self.signal_exit();
         self.report_status();
     }
 }
