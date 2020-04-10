@@ -193,19 +193,6 @@ impl Participant {
     }
 
     ///
-    /// wait_for_exit_signal(&mut self)
-    /// wait until the running flag is set by the CTRL-C handler
-    ///
-    pub fn wait_for_exit_signal(&self) {
-        trace!("participant_{} waiting for exit signal", self.id);
-
-        let stop_msg = self.rx.recv().unwrap();
-        assert!(stop_msg.mtype == MessageType::CoordinatorExit);
-
-        trace!("participant_{} exiting", self.id);
-    }
-
-    ///
     /// report_status()
     /// report the abort/commit/unknown status (aggregate) of all
     /// transaction requests made by this coordinator before exiting.
@@ -270,7 +257,6 @@ impl Participant {
             self.state = ParticipantState::Quiescent;
         }
 
-        // self.wait_for_exit_signal();
         self.report_status();
     }
 }

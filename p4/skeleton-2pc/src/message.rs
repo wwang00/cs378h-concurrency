@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicI32, Ordering};
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MessageType {
     ClientRequest,         // Request a transaction from the coordinator
-    CoordinatorPropose,    // Coordinator sends propose work to participants
+    CoordinatorPropose,    // Coordinator sends propose work to clients
     ParticipantVoteCommit, // Participant votes to commit in phase 1
     ParticipantVoteAbort,  // Participant votes to abort in phase 1
     CoordinatorAbort,      // Coordinator aborts in phase 2
@@ -64,28 +64,22 @@ pub struct ProtocolMessage {
 /// ProtocolMessage implementation
 ///
 impl ProtocolMessage {
-    pub fn generate(mtype: MessageType, txid: i32, senderid: String, opid: i32) -> ProtocolMessage {
+    pub fn generate(t: MessageType, tid: i32, sid: String, oid: i32) -> ProtocolMessage {
         ProtocolMessage {
-            mtype,
+            mtype: t,
             uid: COUNTER.fetch_add(1, Ordering::SeqCst),
-            txid,
-            senderid,
-            opid,
+            txid: tid,
+            senderid: sid,
+            opid: oid,
         }
     }
-    pub fn instantiate(
-        mtype: MessageType,
-        uid: i32,
-        txid: i32,
-        senderid: String,
-        opid: i32,
-    ) -> ProtocolMessage {
+    pub fn instantiate(t: MessageType, u: i32, tid: i32, sid: String, oid: i32) -> ProtocolMessage {
         ProtocolMessage {
-            mtype,
-            uid,
-            txid,
-            senderid,
-            opid,
+            mtype: t,
+            uid: u,
+            txid: tid,
+            senderid: sid,
+            opid: oid,
         }
     }
     pub fn from_string(line: &String) -> ProtocolMessage {

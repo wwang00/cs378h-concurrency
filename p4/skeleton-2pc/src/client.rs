@@ -18,9 +18,6 @@ use std::time::Duration;
 // static counter for getting unique TXID numbers
 static TXID_COUNTER: AtomicI32 = AtomicI32::new(1);
 
-// static counter for getting unique OPID numbers
-static OPID_COUNTER: AtomicI32 = AtomicI32::new(1);
-
 // static timeout for receiving result from coordinator
 static TIMEOUT: Duration = Duration::from_millis(1000);
 
@@ -32,6 +29,7 @@ pub struct Client {
     id: i32,
     id_string: String,
     running: Arc<AtomicBool>,
+    n_clients: i32,
     tx: Sender<ProtocolMessage>,
     rx: Receiver<ProtocolMessage>,
     committed: i32,
@@ -63,6 +61,7 @@ impl Client {
         id: i32,
         id_string: String,
         running: Arc<AtomicBool>,
+        n_clients: i32,
         tx: Sender<ProtocolMessage>,
         rx: Receiver<ProtocolMessage>,
     ) -> Client {
@@ -70,6 +69,7 @@ impl Client {
             id,
             id_string,
             running,
+            n_clients,
             tx,
             rx,
             committed: 0,
@@ -82,12 +82,11 @@ impl Client {
     /// send_next_operation(&mut self)
     /// send the next operation to the coordinator
     ///
-    pub fn send_next_operation(&self) -> Option<()> {
+    pub fn send_next_operation(&self, opid: i32) -> Option<()> {
         trace!("client_{}::send_next_operation...", self.id);
 
         // create a new request with a unique TXID.
         let txid = TXID_COUNTER.fetch_add(1, Ordering::SeqCst);
-        let opid = OPID_COUNTER.fetch_add(1, Ordering::SeqCst);
 
         info!(
             "\tclient_{} request({})->txid:{} called",
@@ -121,7 +120,7 @@ impl Client {
         trace!("client_{}::recv_result...", self.id);
         let mut result = Option::None;
 
-        let received = self.rx.recv();
+        let received = self.rx.recv_timeout(TIMEOUT);
         if let Ok(pm) = received {
             info!("\treceived {:?}", pm);
             result = Some(pm);
@@ -164,14 +163,18 @@ impl Client {
     pub fn protocol(&mut self, n_requests: i32) {
         trace!("client_{}::protocol", self.id);
 
-        for _ in 0..n_requests {
-            let result = self.send_next_operation();
+        for r in 0..n_requests {
+            let result = self.send_next_operation(r * self.n_clients + self.id);
             if let None = result {
+                // simulation has ended
                 break;
             }
             let result = self.recv_result();
             if let None = result {
-                break;
+                if !self.running.load(Ordering::SeqCst) {
+                    // simulation has ended
+                    break;
+                }
             }
             let result = result.unwrap();
             info!("result {:?}", result);

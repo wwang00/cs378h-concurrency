@@ -183,26 +183,6 @@ impl Coordinator {
     }
 
     ///
-    /// signal_exit()
-    /// signal participants and clients to stop
-    ///
-    pub fn signal_exit(&self) {
-        trace!("coordinator sending exit signal");
-
-        let msg = ProtocolMessage::generate(MessageType::CoordinatorExit, -1, String::new(), -1);
-        for c in 0..self.n_clients as usize {
-            let tx = &self.tx_clients[c];
-            tx.send(msg.clone()).unwrap();
-        }
-        for p in 0..self.n_participants as usize {
-            let tx = &self.tx_participants[p];
-            tx.send(msg.clone()).unwrap();
-        }
-
-        thread::sleep(TIMEOUT);
-    }
-
-    ///
     /// protocol()
     /// Implements the coordinator side of the 2PC protocol
     /// HINT: if the simulation ends early, don't keep handling requests!
@@ -270,7 +250,6 @@ impl Coordinator {
             self.state = CoordinatorState::Quiescent;
         }
 
-        // self.signal_exit();
         self.report_status();
     }
 }

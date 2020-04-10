@@ -59,7 +59,7 @@ fn register_clients(
     for c in 0..n_clients {
         let name = format!("client_{}", c);
         let (tx, rx) = coordinator.client_join();
-        clients.push(Client::new(c, name, running.clone(), tx, rx));
+        clients.push(Client::new(c, name, running.clone(), n_clients, tx, rx));
     }
     clients
 }
