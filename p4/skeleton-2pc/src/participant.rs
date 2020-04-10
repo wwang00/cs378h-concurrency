@@ -155,7 +155,7 @@ impl Participant {
 
         let received = self.rx.try_recv();
         if let Ok(pm) = received {
-            info!("\treceived {:?}", pm);
+            info!("participant_{}  received {:?}", self.id, pm);
             result = Some(pm);
         }
         trace!("participant_{}::recv_request exit", self.id);
@@ -182,10 +182,10 @@ impl Participant {
 
         let x: f64 = random();
         if x < self.success_prob_ops {
-            info!("\tsuccess");
+            info!("participant_{}  success", self.id);
             result = RequestStatus::Committed;
         } else {
-            info!("\tfailure");
+            info!("participant_{}  failure", self.id);
         }
 
         trace!("participant_{}::perform_operation exit", self.id);
@@ -258,5 +258,7 @@ impl Participant {
         }
 
         self.report_status();
+
+        trace!("participant_{}  exiting", self.id);
     }
 }

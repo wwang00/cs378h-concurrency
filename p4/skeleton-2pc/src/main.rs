@@ -188,7 +188,6 @@ fn run(opts: &tpcoptions::TPCOptions) {
     launch_clients(clients, opts.num_requests, &mut handles);
     let coordinator_handle = thread::spawn(move || {
         coordinator.protocol();
-        trace!("coordinator terminated");
     });
     handles.push(coordinator_handle);
 

@@ -89,7 +89,7 @@ impl Client {
         let txid = TXID_COUNTER.fetch_add(1, Ordering::SeqCst);
 
         info!(
-            "\tclient_{} request({})->txid:{} called",
+            "client_{}  request({})->txid:{} called",
             self.id, opid, txid
         );
         let pm = ProtocolMessage::generate(
@@ -99,7 +99,7 @@ impl Client {
             opid,
         );
 
-        info!("\tclient_{} calling send...", self.id);
+        info!("\tclient_{}  calling send...", self.id);
 
         let result = self.tx.send(pm);
 
@@ -122,7 +122,7 @@ impl Client {
 
         let received = self.rx.recv();
         if let Ok(pm) = received {
-            info!("\treceived {:?}", pm);
+            info!("client_{}  received {:?}", self.id, pm);
             result = Some(pm);
         }
         trace!("client_{}::recv_result exit", self.id);
@@ -134,11 +134,9 @@ impl Client {
     /// wait until the running flag is set by the CTRL-C handler
     ///
     pub fn wait_for_exit_signal(&self) {
-        trace!("client_{} waiting for exit signal", self.id);
+        trace!("client_{}::wait_for_exit_signal", self.id);
 
         while self.running.load(Ordering::SeqCst) {}
-
-        trace!("client_{} exiting", self.id);
     }
 
     ///
@@ -169,7 +167,7 @@ impl Client {
             let result = self.send_next_operation(opid);
             if let None = result {
                 // TODO handle coordinator failure
-                panic!("coordinator failed");
+                panic!("COORDINATOR FAILED");
                 // break;
             }
         }
@@ -179,11 +177,11 @@ impl Client {
             let result = self.recv_result();
             if let None = result {
                 // TODO handle coordinator failure
-                panic!("coordinator failed");
+                panic!("COORDINATOR FAILED");
                 // break;
             }
             let result = result.unwrap();
-            info!("result {:?}", result);
+            info!("client_{}  result {:?}", self.id, result);
             match result.mtype {
                 MessageType::CoordinatorCommit => self.committed += 1,
                 MessageType::CoordinatorAbort => self.aborted += 1,
@@ -194,6 +192,7 @@ impl Client {
 
         self.wait_for_exit_signal();
         self.report_status();
-        trace!("client_{} exiting", self.id);
+
+        trace!("client_{}  exiting", self.id);
     }
 }

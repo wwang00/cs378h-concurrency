@@ -135,10 +135,10 @@ impl Coordinator {
         let x: f64 = random();
         let mut result: bool = true;
         if x < self.success_prob_msg {
-            info!("\tsuccess");
+            info!("coordinator  success");
             sender.send(pm).unwrap();
         } else {
-            info!("\tfailure");
+            info!("coordinator  failure");
             result = false;
         }
         trace!("coordinator::send exit");
@@ -158,12 +158,38 @@ impl Coordinator {
             let rx = &self.rx_clients[c];
             let received = rx.try_recv();
             if let Ok(pm) = received {
-                info!("\treceived {:?}", pm);
+                info!("coordinator  received request {:?}", pm);
                 result = Some(pm);
                 break;
             }
         }
         trace!("coordinator::recv_request exit");
+        result
+    }
+
+    ///
+    /// collect_votes()
+    /// get result of all votes
+    ///
+    pub fn collect_votes(&mut self) -> bool {
+        let mut result = true;
+        trace!("coordinator::collect_votes...");
+        assert!(self.state == CoordinatorState::Wait);
+
+        for p in 0..self.n_participants as usize {
+            let rx = &self.rx_participants[p];
+            let received = rx.recv_timeout(TIMEOUT);
+            if let Ok(pm) = received {
+                if pm.mtype != MessageType::ParticipantVoteCommit {
+                    result = false;
+                    break;
+                }
+            } else {
+                result = false;
+                break;
+            }
+        }
+        trace!("coordinator::collect_votes exit");
         result
     }
 
@@ -228,14 +254,7 @@ impl Coordinator {
             self.state = CoordinatorState::Wait;
 
             // get participant votes
-            let mut commit = true;
-            for p in 0..self.n_participants as usize {
-                let rx = &self.rx_participants[p];
-                let vote = rx.recv().unwrap();
-                if vote.mtype != MessageType::ParticipantVoteCommit {
-                    commit = false;
-                }
-            }
+            let commit = self.collect_votes();
             let mtype: MessageType;
             let state: CoordinatorState;
             if commit {
@@ -256,12 +275,15 @@ impl Coordinator {
                 let tx = &self.tx_participants[p];
                 self.send(tx, decision_msg.clone());
             }
-            let tx = &self.tx_clients[(decision_msg.opid % self.n_clients) as usize];
+            let client_id = decision_msg.opid % self.n_clients;
+            let tx = &self.tx_clients[client_id as usize];
             self.send(tx, decision_msg.clone());
             self.state = CoordinatorState::Quiescent;
         }
 
         self.signal_stop();
         self.report_status();
+
+        trace!("coordinator  exiting");
     }
 }
