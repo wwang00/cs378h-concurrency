@@ -7,17 +7,11 @@ extern crate rand;
 extern crate stderrlog;
 use message::MessageType;
 use message::ProtocolMessage;
-use message::RequestStatus;
 use oplog;
 use participant::rand::prelude::*;
-use std::collections::HashMap;
-use std::sync::atomic::AtomicI32;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc;
+use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
 
 ///
 /// ParticipantState
@@ -26,10 +20,8 @@ use std::time::Duration;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ParticipantState {
     Quiescent,
-    Armed,
     Ready,
-    Abort,
-    Commit,
+    Decided,
 }
 
 ///
@@ -52,9 +44,6 @@ pub struct Participant {
     aborted: i32,
     unknown: i32,
 }
-
-// static timeout for receiving result from coordinator
-static TIMEOUT: Duration = Duration::from_millis(500);
 
 ///
 /// Participant
@@ -108,11 +97,6 @@ impl Participant {
     /// send()
     /// Send a protocol message to the coordinator.
     /// This variant can be assumed to always succeed.
-    /// You should make sure your solution works using this
-    /// variant before working with the send_unreliable variant.
-    ///
-    /// HINT: you will need to implement something that does the
-    ///       actual sending.
     ///
     pub fn send(&self, pm: ProtocolMessage) -> bool {
         trace!("participant_{}::send...", self.id);
@@ -123,15 +107,10 @@ impl Participant {
     }
 
     ///
-    /// send()
+    /// send_unreliable()
     /// Send a protocol message to the coordinator,
     /// with some probability of success thresholded by the
     /// command line option success_probability [0.0..1.0].
-    /// This variant can be assumed to always succeed
-    ///
-    /// HINT: you will need to implement something that does the
-    ///       actual sending, but you can use the threshold
-    ///       logic in this implementation below.
     ///
     pub fn send_unreliable(&self, pm: ProtocolMessage) -> bool {
         let x: f64 = random();
@@ -150,10 +129,10 @@ impl Participant {
     ///
     pub fn recv_request(&self) -> Option<ProtocolMessage> {
         trace!("participant_{}::recv_request...", self.id);
-        let mut result = Option::None;
-        assert!(self.state == ParticipantState::Quiescent);
+        assert!(self.state != ParticipantState::Ready);
 
-        let received = self.rx.try_recv();
+        let mut result = Option::None;
+        let received = self.rx.recv();
         if let Ok(pm) = received {
             info!("participant_{}  received {:?}", self.id, pm);
             result = Some(pm);
@@ -168,28 +147,22 @@ impl Participant {
     /// with some probability of success/failure determined by the
     /// command-line option success_probability.
     ///
-    /// HINT: The code provided here is not complete--it provides some
-    ///       tracing infrastructure and the probability logic.
-    ///       Your implementation need not preserve the method signature
-    ///       (it's ok to add parameters or return something other than
-    ///       bool if it's more convenient for your design).
-    ///
     pub fn perform_operation(&self) -> bool {
         trace!("participant_{}::perform_operation", self.id);
-        assert!(self.state == ParticipantState::Armed);
+        assert!(self.state == ParticipantState::Ready);
 
-        let mut result: RequestStatus = RequestStatus::Unknown;
+        let mut result = false;
 
         let x: f64 = random();
         if x < self.success_prob_ops {
             info!("participant_{}  success", self.id);
-            result = RequestStatus::Committed;
+            result = true;
         } else {
             info!("participant_{}  failure", self.id);
         }
 
         trace!("participant_{}::perform_operation exit", self.id);
-        result == RequestStatus::Committed
+        result
     }
 
     ///
@@ -213,48 +186,65 @@ impl Participant {
     pub fn protocol(&mut self) {
         trace!("participant_{}::protocol", self.id);
 
-        while self.running.load(Ordering::SeqCst) {
-            // get request
-            let request = self.recv_request();
-            if let None = request {
-                continue;
-            }
-            let request = request.unwrap();
-            let txid = request.txid;
-            let senderid = request.senderid.clone();
-            let opid = request.opid;
-            self.state = ParticipantState::Armed;
+        let mut txid = -1;
+        let mut senderid = String::new();
+        let mut opid = -1;
 
-            // perform operation
-            let op_success = self.perform_operation();
-            self.state = ParticipantState::Ready;
+        loop {
+            match self.state {
+                ParticipantState::Quiescent => {
+                    // get request
+                    let request = self.recv_request();
+                    if let None = request {
+                        // TODO handle coordinator failure
+                        panic!("COORDINATOR FAILED");
+                        // break;
+                    }
+                    let request = request.unwrap();
+                    if request.mtype == MessageType::CoordinatorExit {
+                        break;
+                    }
+                    txid = request.txid;
+                    senderid = request.senderid;
+                    opid = request.opid;
+                    self.state = ParticipantState::Ready;
+                }
+                ParticipantState::Ready => {
+                    // perform operation
+                    let op_success = self.perform_operation();
 
-            // vote
-            let vote: ProtocolMessage;
-            let mtype: MessageType;
-            let state: ParticipantState;
-            if op_success {
-                mtype = MessageType::ParticipantVoteCommit;
-                state = ParticipantState::Commit;
-            } else {
-                mtype = MessageType::ParticipantVoteAbort;
-                state = ParticipantState::Abort;
+                    // vote
+                    let vote: ProtocolMessage;
+                    let mtype = if op_success {
+                        MessageType::ParticipantVoteCommit
+                    } else {
+                        MessageType::ParticipantVoteAbort
+                    };
+                    self.log.append(mtype, txid, senderid.clone(), opid);
+                    vote = ProtocolMessage::generate(mtype, txid, senderid.clone(), opid);
+                    self.send(vote);
+                    self.state = ParticipantState::Decided;
+                }
+                ParticipantState::Decided => {
+                    // get final decision, update locally
+                    let decision = self.recv_request();
+                    if let None = decision {
+                        // TODO handle coordinator failure
+                        panic!("COORDINATOR FAILED");
+                        // break;
+                    }
+                    let decision = decision.unwrap();
+                    match decision.mtype {
+                        MessageType::CoordinatorCommit => self.committed += 1,
+                        MessageType::CoordinatorAbort => self.aborted += 1,
+                        MessageType::CoordinatorExit => break,
+                        _ => (),
+                    }
+                    self.log
+                        .append(decision.mtype, txid, senderid.clone(), opid);
+                    self.state = ParticipantState::Quiescent;
+                }
             }
-            self.log.append(mtype, txid, senderid.clone(), opid);
-            vote = ProtocolMessage::generate(mtype, txid, senderid.clone(), opid);
-            self.send(vote);
-            self.state = state;
-
-            // get final decision, update locally
-            let decision = self.rx.recv().unwrap();
-            match decision.mtype {
-                MessageType::CoordinatorCommit => self.committed += 1,
-                MessageType::CoordinatorAbort => self.aborted += 1,
-                _ => (),
-            }
-            self.log
-                .append(decision.mtype, txid, senderid.clone(), opid);
-            self.state = ParticipantState::Quiescent;
         }
 
         self.report_status();

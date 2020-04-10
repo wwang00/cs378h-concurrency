@@ -4,22 +4,14 @@
 //!
 extern crate log;
 extern crate stderrlog;
-use message;
 use message::MessageType;
 use message::ProtocolMessage;
-use message::RequestStatus;
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
 
 // static counter for getting unique TXID numbers
 static TXID_COUNTER: AtomicI32 = AtomicI32::new(1);
-
-// static timeout for receiving result from coordinator
-static TIMEOUT: Duration = Duration::from_millis(1000);
 
 // client state and
 // primitives for communicating with

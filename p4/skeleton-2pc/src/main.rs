@@ -16,9 +16,6 @@ use client::Client;
 use coordinator::Coordinator;
 use participant::Participant;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
 
 ///

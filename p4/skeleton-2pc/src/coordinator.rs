@@ -6,20 +6,13 @@ extern crate log;
 extern crate rand;
 extern crate stderrlog;
 use coordinator::rand::prelude::*;
-use message;
 use message::MessageType;
 use message::ProtocolMessage;
-use message::RequestStatus;
 use oplog;
-use std::collections::HashMap;
-use std::sync::atomic::AtomicI32;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc;
 use std::sync::mpsc::channel;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::thread;
 use std::time::Duration;
 
 /// CoordinatorState
@@ -55,7 +48,7 @@ pub struct Coordinator {
 }
 
 // static timeout for receiving result from participant
-static TIMEOUT: Duration = Duration::from_millis(500);
+static TIMEOUT: Duration = Duration::from_millis(1000);
 
 ///
 /// Coordinator
@@ -128,20 +121,31 @@ impl Coordinator {
 
     ///
     /// send()
-    /// send a message, maybe drop it
+    /// Send a protocol message to the participant.
+    /// This variant can be assumed to always succeed.
     ///
     pub fn send(&self, sender: &Sender<ProtocolMessage>, pm: ProtocolMessage) -> bool {
         trace!("coordinator::send...");
+        let result: bool = true;
+        sender.send(pm).unwrap();
+        trace!("coordinator::send exit");
+        result
+    }
+
+    ///
+    /// send_unreliable()
+    /// Send a protocol message to the participant,
+    /// with some probability of success thresholded by the
+    /// command line option success_probability [0.0..1.0].
+    ///
+    pub fn send_unreliable(&self, sender: &Sender<ProtocolMessage>, pm: ProtocolMessage) -> bool {
         let x: f64 = random();
-        let mut result: bool = true;
+        let result: bool;
         if x < self.success_prob_msg {
-            info!("coordinator  success");
-            sender.send(pm).unwrap();
+            result = self.send(sender, pm);
         } else {
-            info!("coordinator  failure");
             result = false;
         }
-        trace!("coordinator::send exit");
         result
     }
 
@@ -194,6 +198,28 @@ impl Coordinator {
     }
 
     ///
+    /// signal_stop()
+    /// tell clients, participants to stop
+    ///
+    pub fn signal_stop(&self) {
+        trace!("coordinator::signal_stop");
+        let exit_msg = ProtocolMessage::generate(
+            MessageType::CoordinatorExit,
+            -1,
+            String::from("coordinator"),
+            -1,
+        );
+        for c in 0..self.n_clients as usize {
+            let tx = &self.tx_clients[c];
+            tx.send(exit_msg.clone()).unwrap();
+        }
+        for p in 0..self.n_participants as usize {
+            let tx = &self.tx_participants[p];
+            tx.send(exit_msg.clone()).unwrap();
+        }
+    }
+
+    ///
     /// report_status()
     /// report the abort/commit/unknown status (aggregate) of all
     /// transaction requests made by this coordinator before exiting.
@@ -206,24 +232,8 @@ impl Coordinator {
     }
 
     ///
-    /// signal_stop()
-    /// tell clients, participants to stop
-    ///
-    pub fn signal_stop(&self) {
-        trace!("coordinator::signal_stop");
-        let exit_msg =
-            ProtocolMessage::generate(MessageType::CoordinatorExit, -1, String::from("c"), -1);
-        for c in 0..self.n_clients as usize {
-            let tx = &self.tx_clients[c];
-            tx.send(exit_msg.clone()).unwrap();
-        }
-    }
-
-    ///
     /// protocol()
     /// Implements the coordinator side of the 2PC protocol
-    /// HINT: if the simulation ends early, don't keep handling requests!
-    /// HINT: wait for some kind of exit signal before returning from the protocol!
     ///
     pub fn protocol(&mut self) {
         trace!("coordinator::protocol");
@@ -236,7 +246,7 @@ impl Coordinator {
             }
             let request = request.unwrap();
             let txid = request.txid;
-            let senderid = request.senderid.clone();
+            let senderid = request.senderid;
             let opid = request.opid;
             self.state = CoordinatorState::Armed;
 
