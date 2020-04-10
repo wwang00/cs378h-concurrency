@@ -120,7 +120,7 @@ impl Client {
         trace!("client_{}::recv_result...", self.id);
         let mut result = Option::None;
 
-        let received = self.rx.recv_timeout(TIMEOUT);
+        let received = self.rx.recv();
         if let Ok(pm) = received {
             info!("\treceived {:?}", pm);
             result = Some(pm);
@@ -163,24 +163,31 @@ impl Client {
     pub fn protocol(&mut self, n_requests: i32) {
         trace!("client_{}::protocol", self.id);
 
+        // send all requests
         for r in 0..n_requests {
-            let result = self.send_next_operation(r * self.n_clients + self.id);
+            let opid = r * self.n_clients + self.id;
+            let result = self.send_next_operation(opid);
             if let None = result {
-                // simulation has ended
-                break;
+                // TODO handle coordinator failure
+                panic!("coordinator failed");
+                // break;
             }
+        }
+
+        // receive results
+        loop {
             let result = self.recv_result();
             if let None = result {
-                if !self.running.load(Ordering::SeqCst) {
-                    // simulation has ended
-                    break;
-                }
+                // TODO handle coordinator failure
+                panic!("coordinator failed");
+                // break;
             }
             let result = result.unwrap();
             info!("result {:?}", result);
             match result.mtype {
                 MessageType::CoordinatorCommit => self.committed += 1,
                 MessageType::CoordinatorAbort => self.aborted += 1,
+                MessageType::CoordinatorExit => break,
                 _ => (),
             }
         }

@@ -45,7 +45,6 @@ pub struct Coordinator {
     success_prob_msg: f64,
     n_clients: i32,
     n_participants: i32,
-    curr_client: i32,
     tx_clients: Vec<Sender<ProtocolMessage>>,
     rx_clients: Vec<Receiver<ProtocolMessage>>,
     tx_participants: Vec<Sender<ProtocolMessage>>,
@@ -89,7 +88,6 @@ impl Coordinator {
             success_prob_msg,
             n_clients,
             n_participants,
-            curr_client: -1,
             tx_clients: Vec::new(),
             rx_clients: Vec::new(),
             tx_participants: Vec::new(),
@@ -162,7 +160,6 @@ impl Coordinator {
             if let Ok(pm) = received {
                 info!("\treceived {:?}", pm);
                 result = Some(pm);
-                self.curr_client = c as i32;
                 break;
             }
         }
@@ -180,6 +177,20 @@ impl Coordinator {
             "coordinator:\tC:{}\tA:{}\tU:{}",
             self.committed, self.aborted, self.unknown
         );
+    }
+
+    ///
+    /// signal_stop()
+    /// tell clients, participants to stop
+    ///
+    pub fn signal_stop(&self) {
+        trace!("coordinator::signal_stop");
+        let exit_msg =
+            ProtocolMessage::generate(MessageType::CoordinatorExit, -1, String::from("c"), -1);
+        for c in 0..self.n_clients as usize {
+            let tx = &self.tx_clients[c];
+            tx.send(exit_msg.clone()).unwrap();
+        }
     }
 
     ///
@@ -245,11 +256,12 @@ impl Coordinator {
                 let tx = &self.tx_participants[p];
                 self.send(tx, decision_msg.clone());
             }
-            let tx = &self.tx_clients[self.curr_client as usize];
+            let tx = &self.tx_clients[(decision_msg.opid % self.n_clients) as usize];
             self.send(tx, decision_msg.clone());
             self.state = CoordinatorState::Quiescent;
         }
 
+        self.signal_stop();
         self.report_status();
     }
 }
