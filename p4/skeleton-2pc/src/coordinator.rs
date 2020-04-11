@@ -48,7 +48,7 @@ pub struct Coordinator {
 }
 
 // static timeout for receiving result from participant
-static TIMEOUT: Duration = Duration::from_millis(1000);
+static TIMEOUT: Duration = Duration::from_millis(50);
 
 ///
 /// Coordinator
@@ -155,7 +155,7 @@ impl Coordinator {
     ///
     pub fn recv_request(&mut self) -> Option<ProtocolMessage> {
         let mut result = Option::None;
-        trace!("coordinator::recv_request...");
+        // trace!("coordinator::recv_request...");
         assert!(self.state == CoordinatorState::Quiescent);
 
         for c in 0..self.n_clients as usize {
@@ -167,7 +167,7 @@ impl Coordinator {
                 break;
             }
         }
-        trace!("coordinator::recv_request exit");
+        // trace!("coordinator::recv_request exit");
         result
     }
 
@@ -175,20 +175,22 @@ impl Coordinator {
     /// collect_votes()
     /// get result of all votes
     ///
-    pub fn collect_votes(&mut self) -> bool {
+    pub fn collect_votes(&mut self, txid: i32) -> bool {
         let mut result = true;
         trace!("coordinator::collect_votes...");
         assert!(self.state == CoordinatorState::Wait);
 
         for p in 0..self.n_participants as usize {
+            info!("coordinator  checking participant_{}", p);
             let rx = &self.rx_participants[p];
-            let received = rx.recv_timeout(TIMEOUT);
-            if let Ok(pm) = received {
-                if pm.mtype != MessageType::ParticipantVoteCommit {
-                    result = false;
+            let mut good = false;
+            while let Ok(pm) = rx.recv_timeout(TIMEOUT) {
+                if pm.txid == txid {
+                    good = pm.mtype == MessageType::ParticipantVoteCommit;
                     break;
                 }
-            } else {
+            }
+            if !good {
                 result = false;
                 break;
             }
@@ -259,12 +261,12 @@ impl Coordinator {
             );
             for p in 0..self.n_participants as usize {
                 let tx = &self.tx_participants[p];
-                self.send(tx, request_msg.clone());
+                self.send_unreliable(tx, request_msg.clone());
             }
             self.state = CoordinatorState::Wait;
 
             // get participant votes
-            let commit = self.collect_votes();
+            let commit = self.collect_votes(txid);
             let mtype: MessageType;
             let state: CoordinatorState;
             if commit {

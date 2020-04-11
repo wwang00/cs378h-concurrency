@@ -134,7 +134,10 @@ impl Participant {
         let mut result = Option::None;
         let received = self.rx.recv();
         if let Ok(pm) = received {
-            info!("participant_{}  received {:?}", self.id, pm);
+            info!(
+                "participant_{} ({:?})  received {:?}",
+                self.id, self.state, pm
+            );
             result = Some(pm);
         }
         trace!("participant_{}::recv_request exit", self.id);
@@ -201,8 +204,13 @@ impl Participant {
                         // break;
                     }
                     let request = request.unwrap();
-                    if request.mtype == MessageType::CoordinatorExit {
-                        break;
+                    match request.mtype {
+                        MessageType::CoordinatorPropose => (),
+                        MessageType::CoordinatorExit => break,
+                        MessageType::CoordinatorCommit => {
+                            panic!("participant received commit in quiescent")
+                        }
+                        _ => continue,
                     }
                     txid = request.txid;
                     senderid = request.senderid;
@@ -222,7 +230,7 @@ impl Participant {
                     };
                     self.log.append(mtype, txid, senderid.clone(), opid);
                     vote = ProtocolMessage::generate(mtype, txid, senderid.clone(), opid);
-                    self.send(vote);
+                    self.send_unreliable(vote);
                     self.state = ParticipantState::Decided;
                 }
                 ParticipantState::Decided => {
