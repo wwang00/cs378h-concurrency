@@ -14,9 +14,12 @@ pub mod participant;
 pub mod tpcoptions;
 use client::Client;
 use coordinator::Coordinator;
+use oplog::OpLog;
 use participant::Participant;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::Mutex;
 
 ///
 /// register_clients()
@@ -75,13 +78,12 @@ fn register_participants(
     let mut participants = vec![];
     for p in 0..n_participants {
         let name = format!("participant_{}", p);
-        let logpath = format!("{}/participant_{}.log", logpathbase, p);
         let (tx, rx) = coordinator.participant_join();
         participants.push(Participant::new(
             p,
             name,
             running.clone(),
-            logpath,
+            logpathbase.clone(),
             success_prob_ops,
             success_prob_msg,
             tx,
@@ -161,7 +163,6 @@ fn run(opts: &tpcoptions::TPCOptions) {
     coordinator = Coordinator::new(
         running.clone(),
         logpath,
-        opts.success_probability_ops,
         opts.success_probability_msg,
         opts.num_clients,
         opts.num_participants,

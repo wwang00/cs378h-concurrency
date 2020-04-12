@@ -7,11 +7,12 @@ extern crate rand;
 extern crate stderrlog;
 use message::MessageType;
 use message::ProtocolMessage;
-use oplog;
+use oplog::OpLog;
 use participant::rand::prelude::*;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 ///
 /// ParticipantState
@@ -34,7 +35,9 @@ pub struct Participant {
     id_string: String,
     state: ParticipantState,
     running: Arc<AtomicBool>,
-    log: oplog::OpLog,
+    logpathbase: String,
+    log: OpLog,
+    // log_coordinator: &OpLog,
     success_prob_ops: f64,
     success_prob_msg: f64,
     tx: Sender<ProtocolMessage>,
@@ -43,6 +46,9 @@ pub struct Participant {
     aborted: i32,
     unknown: i32,
 }
+
+// static timeout for receiving final decision from coordinator
+static TIMEOUT: Duration = Duration::from_millis(100);
 
 ///
 /// Participant
@@ -70,7 +76,8 @@ impl Participant {
         id: i32,
         id_string: String,
         running: Arc<AtomicBool>,
-        logpath: String,
+        logpathbase: String,
+        // log_coordinator: &OpLog,
         success_prob_ops: f64,
         success_prob_msg: f64,
         tx: Sender<ProtocolMessage>,
@@ -81,7 +88,9 @@ impl Participant {
             id_string,
             state: ParticipantState::Quiescent,
             running,
-            log: oplog::OpLog::new(logpath),
+            logpathbase: logpathbase.clone(),
+            log: OpLog::new(format!("{}/participant_{}.log", logpathbase, id)),
+            // log_coordinator,
             success_prob_ops,
             success_prob_msg,
             tx,
@@ -98,10 +107,10 @@ impl Participant {
     /// This variant can be assumed to always succeed.
     ///
     pub fn send(&self, pm: ProtocolMessage) -> bool {
-        trace!("participant_{}::send...", self.id);
+        trace!("{}::send...", self.id_string);
         let result: bool = true;
         self.tx.send(pm).unwrap();
-        trace!("participant_{}::send exit", self.id);
+        trace!("{}::send exit", self.id_string);
         result
     }
 
@@ -127,19 +136,53 @@ impl Participant {
     /// receive a message from coordinator
     ///
     pub fn recv_request(&self) -> Option<ProtocolMessage> {
-        trace!("participant_{}::recv_request...", self.id);
+        trace!("{}::recv_request...", self.id_string);
         assert!(self.state != ParticipantState::Ready);
 
         let mut result = Option::None;
         let received = self.rx.recv();
         if let Ok(pm) = received {
-            info!(
-                "participant_{} ({:?})  received {:?}",
-                self.id, self.state, pm
-            );
+            info!("{} ({:?})  received {:?}", self.id_string, self.state, pm);
             result = Some(pm);
         }
-        trace!("participant_{}::recv_request exit", self.id);
+        trace!("{}::recv_request exit", self.id_string);
+        result
+    }
+
+    ///
+    /// recv_decision()
+    /// receive a final decision from coordinator
+    ///
+    pub fn recv_decision(&self, txid: i32) -> Option<ProtocolMessage> {
+        trace!("{}::recv_decision...", self.id_string);
+        assert!(self.state == ParticipantState::Decided);
+
+        let mut result = Option::None;
+        let start_time = Instant::now();
+        while let Ok(pm) = self.rx.recv_timeout(TIMEOUT) {
+            if start_time.elapsed() > TIMEOUT {
+                info!("{}  receiving timed out", self.id_string);
+                break;
+            }
+            if pm.txid == txid {
+                info!("{}  received {:?}", self.id_string, pm);
+                result = Some(pm);
+                break;
+            }
+        }
+        if let None = result {
+            info!("{}  going to global log", self.id_string);
+            let oplog_global = OpLog::from_file(format!("{}/coordinator.log", self.logpathbase));
+            let lck = oplog_global.arc();
+            let log_global = lck.lock().unwrap();
+            for pm in log_global.values() {
+                if pm.txid == txid {
+                    result = Some(pm.clone());
+                    break;
+                }
+            }
+        }
+        trace!("{}::recv_decision exit", self.id_string);
         result
     }
 
@@ -150,20 +193,20 @@ impl Participant {
     /// command-line option success_probability.
     ///
     pub fn perform_operation(&self) -> bool {
-        trace!("participant_{}::perform_operation", self.id);
+        trace!("{}::perform_operation", self.id_string);
         assert!(self.state == ParticipantState::Ready);
 
         let mut result = false;
 
         let x: f64 = random();
         if x < self.success_prob_ops {
-            info!("participant_{}  success", self.id);
+            info!("{}  success", self.id_string);
             result = true;
         } else {
-            info!("participant_{}  failure", self.id);
+            info!("{}  failure", self.id_string);
         }
 
-        trace!("participant_{}::perform_operation exit", self.id);
+        trace!("{}::perform_operation exit", self.id_string);
         result
     }
 
@@ -174,8 +217,8 @@ impl Participant {
     ///
     pub fn report_status(&self) {
         println!(
-            "participant_{}:\tC:{}\tA:{}\tU:{}",
-            self.id, self.committed, self.aborted, self.unknown
+            "{}:\tC:{}\tA:{}\tU:{}",
+            self.id_string, self.committed, self.aborted, self.unknown
         );
     }
 
@@ -186,7 +229,7 @@ impl Participant {
     /// HINT: wait for some kind of exit signal before returning from the protocol!
     ///
     pub fn protocol(&mut self) {
-        trace!("participant_{}::protocol", self.id);
+        trace!("{}::protocol", self.id_string);
 
         let mut txid = -1;
         let mut senderid = String::new();
@@ -206,9 +249,6 @@ impl Participant {
                     match request.mtype {
                         MessageType::CoordinatorPropose => (),
                         MessageType::CoordinatorExit => break,
-                        MessageType::CoordinatorCommit => {
-                            panic!("participant received commit in quiescent")
-                        }
                         _ => continue,
                     }
                     txid = request.txid;
@@ -234,10 +274,10 @@ impl Participant {
                 }
                 ParticipantState::Decided => {
                     // get final decision, update locally
-                    let decision = self.recv_request();
+                    let decision = self.recv_decision(txid);
                     if let None = decision {
                         // TODO handle coordinator failure
-                        panic!("COORDINATOR FAILED");
+                        panic!("NO DECISION IN GLOBAL LOG");
                         // break;
                     }
                     let decision = decision.unwrap();
@@ -256,6 +296,6 @@ impl Participant {
 
         self.report_status();
 
-        trace!("participant_{}  exiting", self.id);
+        trace!("{}  exiting", self.id_string);
     }
 }

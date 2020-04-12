@@ -33,7 +33,6 @@ pub struct Coordinator {
     state: CoordinatorState,
     running: Arc<AtomicBool>,
     log: oplog::OpLog,
-    success_prob_ops: f64,
     success_prob_msg: f64,
     n_clients: i32,
     n_participants: i32,
@@ -67,7 +66,6 @@ impl Coordinator {
     pub fn new(
         running: Arc<AtomicBool>,
         logpath: String,
-        success_prob_ops: f64,
         success_prob_msg: f64,
         n_clients: i32,
         n_participants: i32,
@@ -76,7 +74,6 @@ impl Coordinator {
             state: CoordinatorState::Quiescent,
             running,
             log: oplog::OpLog::new(logpath),
-            success_prob_ops,
             success_prob_msg,
             n_clients,
             n_participants,
@@ -212,11 +209,11 @@ impl Coordinator {
         );
         for c in 0..self.n_clients as usize {
             let tx = &self.tx_clients[c];
-            tx.send(exit_msg.clone()).unwrap();
+            self.send(tx, exit_msg.clone());
         }
         for p in 0..self.n_participants as usize {
             let tx = &self.tx_participants[p];
-            tx.send(exit_msg.clone()).unwrap();
+            self.send(tx, exit_msg.clone());
         }
     }
 
@@ -284,7 +281,7 @@ impl Coordinator {
             let decision_msg = ProtocolMessage::generate(mtype, txid, senderid.clone(), opid);
             for p in 0..self.n_participants as usize {
                 let tx = &self.tx_participants[p];
-                self.send(tx, decision_msg.clone());
+                self.send_unreliable(tx, decision_msg.clone());
             }
             let client_id = decision_msg.opid % self.n_clients;
             let tx = &self.tx_clients[client_id as usize];

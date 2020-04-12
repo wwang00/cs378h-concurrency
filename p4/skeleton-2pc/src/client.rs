@@ -74,27 +74,27 @@ impl Client {
     /// send the next operation to the coordinator
     ///
     pub fn send_next_operation(&self, opid: i32) -> Option<()> {
-        trace!("client_{}::send_next_operation...", self.id);
+        trace!("{}::send_next_operation...", self.id_string);
 
         // create a new request with a unique TXID.
         let txid = TXID_COUNTER.fetch_add(1, Ordering::SeqCst);
 
         info!(
-            "client_{}  request({})->txid:{} called",
-            self.id, opid, txid
+            "{}  request({})->txid:{} called",
+            self.id_string, opid, txid
         );
         let pm = ProtocolMessage::generate(
             MessageType::ClientRequest,
             txid,
-            format!("client_{}", self.id),
+            format!("{}", self.id_string),
             opid,
         );
 
-        info!("\tclient_{}  calling send...", self.id);
+        info!("\t{}  calling send...", self.id_string);
 
         let result = self.tx.send(pm);
 
-        trace!("client_{}::send_next_operation exit", self.id);
+        trace!("{}::send_next_operation exit", self.id_string);
         if let Ok(()) = result {
             return Some(());
         }
@@ -108,15 +108,15 @@ impl Client {
     /// not fail in this simulation
     ///
     pub fn recv_result(&self) -> Option<ProtocolMessage> {
-        trace!("client_{}::recv_result...", self.id);
+        trace!("{}::recv_result...", self.id_string);
         let mut result = Option::None;
 
         let received = self.rx.recv();
         if let Ok(pm) = received {
-            info!("client_{}  received {:?}", self.id, pm);
+            info!("{}  received {:?}", self.id_string, pm);
             result = Some(pm);
         }
-        trace!("client_{}::recv_result exit", self.id);
+        trace!("{}::recv_result exit", self.id_string);
         result
     }
 
@@ -125,7 +125,7 @@ impl Client {
     /// wait until the running flag is set by the CTRL-C handler
     ///
     pub fn wait_for_exit_signal(&self) {
-        trace!("client_{}::wait_for_exit_signal", self.id);
+        trace!("{}::wait_for_exit_signal", self.id_string);
 
         while self.running.load(Ordering::SeqCst) {}
     }
@@ -137,8 +137,8 @@ impl Client {
     ///
     pub fn report_status(&self) {
         println!(
-            "client_{}:\tC:{}\tA:{}\tU:{}",
-            self.id, self.committed, self.aborted, self.unknown
+            "{}:\tC:{}\tA:{}\tU:{}",
+            self.id_string, self.committed, self.aborted, self.unknown
         );
     }
 
@@ -150,7 +150,7 @@ impl Client {
     ///       exit signal before returning from the protocol method!
     ///
     pub fn protocol(&mut self, n_requests: i32) {
-        trace!("client_{}::protocol", self.id);
+        trace!("{}::protocol", self.id_string);
 
         // send all requests
         for r in 0..n_requests {
@@ -172,7 +172,7 @@ impl Client {
                 // break;
             }
             let result = result.unwrap();
-            info!("client_{}  result {:?}", self.id, result);
+            info!("{}  result {:?}", self.id_string, result);
             match result.mtype {
                 MessageType::CoordinatorCommit => self.committed += 1,
                 MessageType::CoordinatorAbort => self.aborted += 1,
@@ -184,6 +184,6 @@ impl Client {
         self.wait_for_exit_signal();
         self.report_status();
 
-        trace!("client_{}  exiting", self.id);
+        trace!("{}  exiting", self.id_string);
     }
 }

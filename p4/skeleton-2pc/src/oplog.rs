@@ -32,7 +32,7 @@ impl OpLog {
         }
     }
     pub fn from_file(fpath: String) -> OpLog {
-        info!("OpLog::from_file({})", fpath);
+        trace!("OpLog::from_file({})", fpath);
         let seqno = 0;
         let mut l = HashMap::new();
         let tlf = CommitLog::new(LogOptions::new(fpath)).unwrap();
@@ -40,7 +40,7 @@ impl OpLog {
         for msg in messages.iter() {
             let line = String::from_utf8(msg.payload().to_vec()).unwrap();
             let pm = message::ProtocolMessage::from_string(&line);
-            info!("{:?}", pm);
+            // info!("{:?}", pm);
             l.insert(pm.uid, pm);
         }
         let lck = Mutex::new(l);
@@ -61,7 +61,7 @@ impl OpLog {
         self.lf.append_msg(json.as_bytes()).unwrap();
         log.insert(id, pm);
     }
-    pub fn read(&mut self, offset: &i32) -> message::ProtocolMessage {
+    pub fn read(&self, offset: &i32) -> message::ProtocolMessage {
         let lck = Arc::clone(&self.log_arc);
         let log = lck.lock().unwrap();
         let pm = log[&offset].clone();
