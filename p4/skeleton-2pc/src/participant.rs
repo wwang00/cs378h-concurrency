@@ -34,10 +34,10 @@ pub struct Participant {
     id: i32,
     id_string: String,
     state: ParticipantState,
-    running: Arc<AtomicBool>,
+    pub running: Arc<AtomicBool>,
     logpathbase: String,
     log: OpLog,
-    // log_coordinator: &OpLog,
+    failure_prob: f64,
     success_prob_ops: f64,
     success_prob_msg: f64,
     tx: Sender<ProtocolMessage>,
@@ -48,7 +48,7 @@ pub struct Participant {
 }
 
 // static timeout for receiving final decision from coordinator
-static TIMEOUT: Duration = Duration::from_millis(100);
+static TIMEOUT: Duration = Duration::from_millis(200);
 
 ///
 /// Participant
@@ -77,7 +77,7 @@ impl Participant {
         id_string: String,
         running: Arc<AtomicBool>,
         logpathbase: String,
-        // log_coordinator: &OpLog,
+        failure_prob: f64,
         success_prob_ops: f64,
         success_prob_msg: f64,
         tx: Sender<ProtocolMessage>,
@@ -90,7 +90,7 @@ impl Participant {
             running,
             logpathbase: logpathbase.clone(),
             log: OpLog::new(format!("{}/participant_{}.log", logpathbase, id)),
-            // log_coordinator,
+            failure_prob,
             success_prob_ops,
             success_prob_msg,
             tx,
@@ -173,9 +173,8 @@ impl Participant {
         if let None = result {
             info!("{}  going to global log", self.id_string);
             let oplog_global = OpLog::from_file(format!("{}/coordinator.log", self.logpathbase));
-            let lck = oplog_global.arc();
-            let log_global = lck.lock().unwrap();
-            for pm in log_global.values() {
+            for offset in (1..(oplog_global.seqno + 1)).rev() {
+                let pm = oplog_global.read(&offset);
                 if pm.txid == txid {
                     result = Some(pm.clone());
                     break;
@@ -200,10 +199,10 @@ impl Participant {
 
         let x: f64 = random();
         if x < self.success_prob_ops {
-            info!("{}  success", self.id_string);
+            info!("{}  decided success", self.id_string);
             result = true;
         } else {
-            info!("{}  failure", self.id_string);
+            info!("{}  decided failure", self.id_string);
         }
 
         trace!("{}::perform_operation exit", self.id_string);
@@ -231,9 +230,31 @@ impl Participant {
     pub fn protocol(&mut self) {
         trace!("{}::protocol", self.id_string);
 
-        let mut txid = -1;
-        let mut senderid = String::new();
-        let mut opid = -1;
+        let mut txid: i32;
+        let mut senderid: String;
+        let mut opid: i32;
+
+        self.log = OpLog::from_file(format!("{}/{}.log", self.logpathbase, self.id_string));
+        let seqno = self.log.seqno;
+        if seqno > 0 {
+            // recovery protocol, build internal state from commitlog
+            let pm = self.log.read(&seqno);
+            info!("{}  recovered from {:?}", self.id_string, pm);
+            txid = pm.txid;
+            senderid = pm.senderid.clone();
+            opid = pm.opid;
+            if let MessageType::ParticipantVoteCommit = pm.mtype {
+                self.state = ParticipantState::Decided;
+            } else {
+                self.state = ParticipantState::Quiescent;
+            }
+        } else {
+            // initialize
+            txid = -1;
+            senderid = String::new();
+            opid = -1;
+            self.state = ParticipantState::Quiescent;
+        }
 
         loop {
             match self.state {
@@ -267,9 +288,9 @@ impl Participant {
                     } else {
                         MessageType::ParticipantVoteAbort
                     };
-                    self.log.append(mtype, txid, senderid.clone(), opid);
                     vote = ProtocolMessage::generate(mtype, txid, senderid.clone(), opid);
                     self.send_unreliable(vote);
+                    self.log.append(mtype, txid, senderid.clone(), opid);
                     self.state = ParticipantState::Decided;
                 }
                 ParticipantState::Decided => {
@@ -277,7 +298,7 @@ impl Participant {
                     let decision = self.recv_decision(txid);
                     if let None = decision {
                         // TODO handle coordinator failure
-                        panic!("NO DECISION IN GLOBAL LOG");
+                        panic!("{}  NO DECISION IN GLOBAL LOG", self.id_string);
                         // break;
                     }
                     let decision = decision.unwrap();
@@ -291,6 +312,11 @@ impl Participant {
                         .append(decision.mtype, txid, senderid.clone(), opid);
                     self.state = ParticipantState::Quiescent;
                 }
+            }
+            let x: f64 = random();
+            if x < self.failure_prob {
+                info!("{}  FAILURE", self.id_string);
+                return;
             }
         }
 

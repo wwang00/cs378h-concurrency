@@ -46,7 +46,7 @@ pub struct Coordinator {
 }
 
 // static timeout for receiving result from participant
-static TIMEOUT: Duration = Duration::from_millis(50);
+static TIMEOUT: Duration = Duration::from_millis(100);
 
 ///
 /// Coordinator

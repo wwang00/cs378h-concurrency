@@ -8,4 +8,4 @@ else
     MODE=check
 fi
 
-./target/debug/cs380p-2pc -s .9 -S .95 -c 8 -p 8 -r 10 -v 5 -m $MODE
+./target/debug/cs380p-2pc -f 0.1 -s .9 -S .99 -c 1 -p 4 -r 100 -v 5 -m $MODE

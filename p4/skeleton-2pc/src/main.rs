@@ -4,6 +4,7 @@ extern crate clap;
 extern crate ctrlc;
 extern crate stderrlog;
 use std::thread;
+use std::thread::sleep;
 use std::thread::JoinHandle;
 pub mod checker;
 pub mod client;
@@ -14,12 +15,12 @@ pub mod participant;
 pub mod tpcoptions;
 use client::Client;
 use coordinator::Coordinator;
-use oplog::OpLog;
 use participant::Participant;
-use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::sync::Mutex;
+use std::time::Duration;
+
+static CRASH_TIMEOUT: Duration = Duration::from_millis(100);
 
 ///
 /// register_clients()
@@ -72,6 +73,7 @@ fn register_participants(
     n_participants: i32,
     running: &Arc<AtomicBool>,
     logpathbase: &String,
+    failure_prob: f64,
     success_prob_ops: f64,
     success_prob_msg: f64,
 ) -> Vec<Participant> {
@@ -84,6 +86,7 @@ fn register_participants(
             name,
             running.clone(),
             logpathbase.clone(),
+            failure_prob,
             success_prob_ops,
             success_prob_msg,
             tx,
@@ -115,7 +118,10 @@ fn launch_clients(clients: Vec<Client>, n_requests: i32, handles: &mut Vec<JoinH
 fn launch_participants(participants: Vec<Participant>, handles: &mut Vec<JoinHandle<()>>) {
     for mut participant in participants {
         let handle = thread::spawn(move || {
-            participant.protocol();
+            while participant.running.load(Ordering::SeqCst) {
+                participant.protocol();
+                sleep(CRASH_TIMEOUT);
+            }
         });
         handles.push(handle);
     }
@@ -177,6 +183,7 @@ fn run(opts: &tpcoptions::TPCOptions) {
         opts.num_participants,
         &running,
         &opts.logpath,
+        opts.failure_probability,
         opts.success_probability_ops,
         opts.success_probability_msg,
     );
