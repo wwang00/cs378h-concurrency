@@ -16,7 +16,6 @@ static TXID_COUNTER: AtomicI32 = AtomicI32::new(1);
 // client state and
 // primitives for communicating with
 // the coordinator
-#[derive(Debug)]
 pub struct Client {
     id: i32,
     id_string: String,

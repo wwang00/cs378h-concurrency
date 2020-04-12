@@ -29,7 +29,6 @@ pub enum ParticipantState {
 /// structure for maintaining per-participant state
 /// and communication/synchronization objects to/from coordinator
 ///
-#[derive(Debug)]
 pub struct Participant {
     id: i32,
     id_string: String,

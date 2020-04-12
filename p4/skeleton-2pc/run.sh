@@ -2,8 +2,8 @@
 
 if [ "$1" == "" ]; then
     MODE=run
-    rm -f /tmp/coordinator.log
-    rm -f /tmp/participant_*.log
+    rm -rf /tmp/coordinator.log
+    rm -rf /tmp/participant_*.log
 else
     MODE=check
 fi

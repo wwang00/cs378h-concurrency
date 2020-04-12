@@ -29,7 +29,6 @@ pub enum CoordinatorState {
 
 /// Coordinator
 /// struct maintaining state for coordinator
-#[derive(Debug)]
 pub struct Coordinator {
     state: CoordinatorState,
     running: Arc<AtomicBool>,
