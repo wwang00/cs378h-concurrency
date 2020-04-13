@@ -157,9 +157,7 @@ impl Client {
             let opid = r * self.n_clients + self.id;
             let result = self.send_next_operation(opid);
             if let None = result {
-                // TODO handle coordinator failure
-                panic!("COORDINATOR FAILED");
-                // break;
+                panic!("COORDINATOR DISCONNECTED");
             }
         }
 
@@ -167,9 +165,7 @@ impl Client {
         loop {
             let result = self.recv_result();
             if let None = result {
-                // TODO handle coordinator failure
-                panic!("COORDINATOR FAILED");
-                // break;
+                panic!("COORDINATOR DISCONNECTED");
             }
             let result = result.unwrap();
             info!("{}  result {:?}", self.id_string, result);

@@ -165,10 +165,9 @@ fn run(opts: &tpcoptions::TPCOptions) {
     let participants: Vec<Participant>;
 
     // init coordinator
-    let logpath = format!("{}/coordinator.log", opts.logpath);
     coordinator = Coordinator::new(
         running.clone(),
-        logpath,
+        opts.logpath.clone(),
         opts.success_probability_msg,
         opts.num_clients,
         opts.num_participants,
@@ -192,7 +191,9 @@ fn run(opts: &tpcoptions::TPCOptions) {
     launch_participants(participants, &mut handles);
     launch_clients(clients, opts.num_requests, &mut handles);
     let coordinator_handle = thread::spawn(move || {
-        coordinator.protocol();
+        while coordinator.running.load(Ordering::SeqCst) {
+            coordinator.protocol();
+        }
     });
     handles.push(coordinator_handle);
 

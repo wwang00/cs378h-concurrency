@@ -21,8 +21,8 @@ use std::time::{Duration, Instant};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ParticipantState {
     Quiescent,
-    Ready,
-    Decided,
+    Voting,
+    Confirming,
     Recovering,
 }
 
@@ -49,7 +49,7 @@ pub struct Participant {
 }
 
 // static timeout for receiving final decision from coordinator
-static TIMEOUT: Duration = Duration::from_millis(150);
+static TIMEOUT: Duration = Duration::from_millis(80);
 
 ///
 /// Participant
@@ -127,6 +127,7 @@ impl Participant {
         if x < self.success_prob_msg {
             result = self.send(pm);
         } else {
+            trace!("{}::send_unreliable failed", self.id_string);
             result = false;
         }
         result
@@ -138,7 +139,7 @@ impl Participant {
     ///
     pub fn recv_request(&self) -> Option<ProtocolMessage> {
         trace!("{}::recv_request...", self.id_string);
-        assert!(self.state != ParticipantState::Ready);
+        assert!(self.state != ParticipantState::Voting);
 
         let mut result = None;
         let received = self.rx.recv();
@@ -156,7 +157,7 @@ impl Participant {
     ///
     pub fn recv_decision(&self, txid: i32) -> ProtocolMessage {
         trace!("{}::recv_decision...", self.id_string);
-        assert!(self.state == ParticipantState::Decided);
+        assert!(self.state == ParticipantState::Confirming);
 
         let mut result = None;
         let start_time = Instant::now();
@@ -173,7 +174,6 @@ impl Participant {
                 }
             }
         }
-        info!("{}  going to global log", self.id_string);
         while let None = result {
             let oplog_global = OpLog::from_file(format!("{}/coordinator.log", self.logpathbase));
             for offset in (1..(oplog_global.seqno + 1)).rev() {
@@ -196,7 +196,7 @@ impl Participant {
     ///
     pub fn perform_operation(&self) -> bool {
         trace!("{}::perform_operation", self.id_string);
-        assert!(self.state == ParticipantState::Ready);
+        assert!(self.state == ParticipantState::Voting);
 
         let mut result = false;
 
@@ -268,9 +268,7 @@ impl Participant {
                     // get request
                     let request = self.recv_request();
                     if let None = request {
-                        // TODO handle coordinator failure
-                        panic!("COORDINATOR FAILED");
-                        // break;
+                        panic!("COORDINATOR DISCONNECTED");
                     }
                     let request = request.unwrap();
                     match request.mtype {
@@ -281,9 +279,9 @@ impl Participant {
                     txid = request.txid;
                     senderid = request.senderid;
                     opid = request.opid;
-                    self.state = ParticipantState::Ready;
+                    self.state = ParticipantState::Voting;
                 }
-                ParticipantState::Ready => {
+                ParticipantState::Voting => {
                     // perform operation
                     let op_success = self.perform_operation();
 
@@ -295,11 +293,11 @@ impl Participant {
                         MessageType::ParticipantVoteAbort
                     };
                     vote = ProtocolMessage::generate(mtype, txid, senderid.clone(), opid);
-                    self.send_unreliable(vote);
-                    self.log.append(mtype, txid, senderid.clone(), opid);
-                    self.state = ParticipantState::Decided;
+                    self.send_unreliable(vote.clone());
+                    self.log.append_pm(vote);
+                    self.state = ParticipantState::Confirming;
                 }
-                ParticipantState::Decided => {
+                ParticipantState::Confirming => {
                     // get final decision, update locally
                     let decision = self.recv_decision(txid);
                     match decision.mtype {

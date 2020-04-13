@@ -8,7 +8,7 @@ extern crate stderrlog;
 use coordinator::rand::prelude::*;
 use message::MessageType;
 use message::ProtocolMessage;
-use oplog;
+use oplog::OpLog;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::mpsc::{Receiver, Sender};
@@ -21,18 +21,18 @@ use std::time::{Duration, Instant};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CoordinatorState {
     Quiescent,
-    Armed,
-    Wait,
-    Abort,
-    Commit,
+    Broadcasting,
+    Collecting,
+    Recovering,
 }
 
 /// Coordinator
 /// struct maintaining state for coordinator
 pub struct Coordinator {
     state: CoordinatorState,
-    running: Arc<AtomicBool>,
-    log: oplog::OpLog,
+    pub running: Arc<AtomicBool>,
+    logpathbase: String,
+    log: OpLog,
     success_prob_msg: f64,
     n_clients: i32,
     n_participants: i32,
@@ -46,7 +46,7 @@ pub struct Coordinator {
 }
 
 // static timeout for receiving votes from participants
-static TIMEOUT: Duration = Duration::from_millis(100);
+static TIMEOUT: Duration = Duration::from_millis(40);
 
 ///
 /// Coordinator
@@ -65,7 +65,7 @@ impl Coordinator {
     ///
     pub fn new(
         running: Arc<AtomicBool>,
-        logpath: String,
+        logpathbase: String,
         success_prob_msg: f64,
         n_clients: i32,
         n_participants: i32,
@@ -73,7 +73,8 @@ impl Coordinator {
         Coordinator {
             state: CoordinatorState::Quiescent,
             running,
-            log: oplog::OpLog::new(logpath),
+            logpathbase: logpathbase.clone(),
+            log: OpLog::new(format!("{}/coordinator.log", logpathbase)),
             success_prob_msg,
             n_clients,
             n_participants,
@@ -140,6 +141,7 @@ impl Coordinator {
         if x < self.success_prob_msg {
             result = self.send(sender, pm);
         } else {
+            trace!("coordinator::send_unreliable failed");
             result = false;
         }
         result
@@ -174,7 +176,7 @@ impl Coordinator {
     pub fn collect_votes(&mut self, txid: i32) -> bool {
         let mut result = true;
         trace!("coordinator::collect_votes...");
-        assert!(self.state == CoordinatorState::Wait);
+        assert!(self.state == CoordinatorState::Collecting);
 
         let start_time = Instant::now();
         for p in 0..self.n_participants as usize {
@@ -243,58 +245,152 @@ impl Coordinator {
     pub fn protocol(&mut self) {
         trace!("coordinator::protocol");
 
-        while self.running.load(Ordering::SeqCst) {
-            // get request
-            let request = self.recv_request();
-            if let None = request {
-                continue;
-            }
-            let request = request.unwrap();
-            let txid = request.txid;
-            let senderid = request.senderid;
-            let opid = request.opid;
-            self.state = CoordinatorState::Armed;
+        let mut txid: i32;
+        let mut senderid: String;
+        let mut opid: i32;
 
-            // send request to participants
-            let request_msg = ProtocolMessage::generate(
-                MessageType::CoordinatorPropose,
-                txid,
-                senderid.clone(),
-                opid,
-            );
-            for p in 0..self.n_participants as usize {
-                let tx = &self.tx_participants[p];
-                self.send_unreliable(tx, request_msg.clone());
-            }
-            self.state = CoordinatorState::Wait;
-
-            // get participant votes
-            let commit = self.collect_votes(txid);
-            let mtype: MessageType;
-            let state: CoordinatorState;
-            if commit {
-                self.committed += 1;
-                mtype = MessageType::CoordinatorCommit;
-                state = CoordinatorState::Commit;
+        self.log = OpLog::from_file(format!("{}/coordinator.log", self.logpathbase));
+        let seqno = self.log.seqno;
+        if seqno > 0 {
+            // recovery protocol, build internal state from commitlog
+            let pm = self.log.read(&seqno);
+            info!("coordinator  recovered from {:?}", pm);
+            txid = pm.txid;
+            senderid = pm.senderid.clone();
+            opid = pm.opid;
+            if let MessageType::CoordinatorPropose = pm.mtype {
+                self.state = CoordinatorState::Recovering;
             } else {
-                self.aborted += 1;
-                mtype = MessageType::CoordinatorAbort;
-                state = CoordinatorState::Abort;
+                self.state = CoordinatorState::Quiescent;
             }
-            self.log.append(mtype, txid, senderid.clone(), opid);
-            self.state = state;
-
-            // send final decision to participants and result to client
-            let decision_msg = ProtocolMessage::generate(mtype, txid, senderid.clone(), opid);
-            for p in 0..self.n_participants as usize {
-                let tx = &self.tx_participants[p];
-                self.send_unreliable(tx, decision_msg.clone());
-            }
-            let client_id = decision_msg.opid % self.n_clients;
-            let tx = &self.tx_clients[client_id as usize];
-            self.send(tx, decision_msg.clone());
+        } else {
+            // initialize
+            txid = -1;
+            senderid = String::new();
+            opid = -1;
             self.state = CoordinatorState::Quiescent;
         }
+
+        loop {
+            match self.state {
+                CoordinatorState::Quiescent => {
+                    if !self.running.load(Ordering::SeqCst) {
+                        break;
+                    }
+                    // get request
+                    let request = self.recv_request();
+                    if let None = request {
+                        continue;
+                    }
+                    let request = request.unwrap();
+                    txid = request.txid;
+                    senderid = request.senderid;
+                    opid = request.opid;
+                    self.state = CoordinatorState::Broadcasting;
+                }
+                CoordinatorState::Broadcasting => {
+                    let request_msg = ProtocolMessage::generate(
+                        MessageType::CoordinatorPropose,
+                        txid,
+                        senderid.clone(),
+                        opid,
+                    );
+                    // log request
+                    self.log.append_pm(request_msg.clone());
+                    // send request to participants
+                    for p in 0..self.n_participants as usize {
+                        let tx = &self.tx_participants[p];
+                        self.send_unreliable(tx, request_msg.clone());
+                    }
+                    self.state = CoordinatorState::Collecting;
+                }
+                CoordinatorState::Collecting | CoordinatorState::Recovering => {
+                    // get participant votes (if collecting)
+                    let collecting = self.state == CoordinatorState::Collecting;
+                    let commit = if collecting {
+                        self.collect_votes(txid)
+                    } else {
+                        false
+                    };
+                    let mtype: MessageType;
+                    if commit {
+                        self.committed += 1;
+                        mtype = MessageType::CoordinatorCommit;
+                    } else {
+                        self.aborted += 1;
+                        mtype = MessageType::CoordinatorAbort;
+                    }
+
+                    // send final decision to participants and result to client
+                    let decision_msg =
+                        ProtocolMessage::generate(mtype, txid, senderid.clone(), opid);
+                    self.log.append_pm(decision_msg.clone());
+                    for p in 0..self.n_participants as usize {
+                        let tx = &self.tx_participants[p];
+                        self.send_unreliable(tx, decision_msg.clone());
+                    }
+                    if collecting {
+                        let client_id = decision_msg.opid % self.n_clients;
+                        let tx = &self.tx_clients[client_id as usize];
+                        self.send(tx, decision_msg.clone());
+                    }
+                    self.state = CoordinatorState::Quiescent;
+                }
+            }
+        }
+
+        // while self.running.load(Ordering::SeqCst) {
+        //     // get request
+        //     let request = self.recv_request();
+        //     if let None = request {
+        //         continue;
+        //     }
+        //     let request = request.unwrap();
+        //     let txid = request.txid;
+        //     let senderid = request.senderid;
+        //     let opid = request.opid;
+        //     self.state = CoordinatorState::Armed;
+
+        //     // send request to participants
+        //     let request_msg = ProtocolMessage::generate(
+        //         MessageType::CoordinatorPropose,
+        //         txid,
+        //         senderid.clone(),
+        //         opid,
+        //     );
+        //     for p in 0..self.n_participants as usize {
+        //         let tx = &self.tx_participants[p];
+        //         self.send_unreliable(tx, request_msg.clone());
+        //     }
+        //     self.state = CoordinatorState::Wait;
+
+        //     // get participant votes
+        //     let commit = self.collect_votes(txid);
+        //     let mtype: MessageType;
+        //     let state: CoordinatorState;
+        //     if commit {
+        //         self.committed += 1;
+        //         mtype = MessageType::CoordinatorCommit;
+        //         state = CoordinatorState::Commit;
+        //     } else {
+        //         self.aborted += 1;
+        //         mtype = MessageType::CoordinatorAbort;
+        //         state = CoordinatorState::Abort;
+        //     }
+        //     self.log.append(mtype, txid, senderid.clone(), opid);
+        //     self.state = state;
+
+        //     // send final decision to participants and result to client
+        //     let decision_msg = ProtocolMessage::generate(mtype, txid, senderid.clone(), opid);
+        //     for p in 0..self.n_participants as usize {
+        //         let tx = &self.tx_participants[p];
+        //         self.send_unreliable(tx, decision_msg.clone());
+        //     }
+        //     let client_id = decision_msg.opid % self.n_clients;
+        //     let tx = &self.tx_clients[client_id as usize];
+        //     self.send(tx, decision_msg.clone());
+        //     self.state = CoordinatorState::Quiescent;
+        // }
 
         self.signal_stop();
         self.report_status();
