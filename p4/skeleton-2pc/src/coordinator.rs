@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::channel;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// CoordinatorState
 /// States for 2PC state machine
@@ -45,7 +45,7 @@ pub struct Coordinator {
     unknown: i32,
 }
 
-// static timeout for receiving result from participant
+// static timeout for receiving votes from participants
 static TIMEOUT: Duration = Duration::from_millis(100);
 
 ///
@@ -176,14 +176,21 @@ impl Coordinator {
         trace!("coordinator::collect_votes...");
         assert!(self.state == CoordinatorState::Wait);
 
+        let start_time = Instant::now();
         for p in 0..self.n_participants as usize {
             info!("coordinator  checking participant_{}", p);
             let rx = &self.rx_participants[p];
             let mut good = false;
-            while let Ok(pm) = rx.recv_timeout(TIMEOUT) {
-                if pm.txid == txid {
-                    good = pm.mtype == MessageType::ParticipantVoteCommit;
+            loop {
+                if start_time.elapsed() > TIMEOUT {
+                    info!("coordinator  collecting timed out");
                     break;
+                }
+                if let Ok(pm) = rx.try_recv() {
+                    if pm.txid == txid {
+                        good = pm.mtype == MessageType::ParticipantVoteCommit;
+                        break;
+                    }
                 }
             }
             if !good {

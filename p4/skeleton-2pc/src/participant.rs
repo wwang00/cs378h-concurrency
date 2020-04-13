@@ -23,6 +23,7 @@ pub enum ParticipantState {
     Quiescent,
     Ready,
     Decided,
+    Recovering,
 }
 
 ///
@@ -48,7 +49,7 @@ pub struct Participant {
 }
 
 // static timeout for receiving final decision from coordinator
-static TIMEOUT: Duration = Duration::from_millis(200);
+static TIMEOUT: Duration = Duration::from_millis(150);
 
 ///
 /// Participant
@@ -139,10 +140,10 @@ impl Participant {
         trace!("{}::recv_request...", self.id_string);
         assert!(self.state != ParticipantState::Ready);
 
-        let mut result = Option::None;
+        let mut result = None;
         let received = self.rx.recv();
         if let Ok(pm) = received {
-            info!("{} ({:?})  received {:?}", self.id_string, self.state, pm);
+            info!("{}  received {:?}", self.id_string, pm);
             result = Some(pm);
         }
         trace!("{}::recv_request exit", self.id_string);
@@ -153,25 +154,27 @@ impl Participant {
     /// recv_decision()
     /// receive a final decision from coordinator
     ///
-    pub fn recv_decision(&self, txid: i32) -> Option<ProtocolMessage> {
+    pub fn recv_decision(&self, txid: i32) -> ProtocolMessage {
         trace!("{}::recv_decision...", self.id_string);
         assert!(self.state == ParticipantState::Decided);
 
-        let mut result = Option::None;
+        let mut result = None;
         let start_time = Instant::now();
-        while let Ok(pm) = self.rx.recv_timeout(TIMEOUT) {
+        loop {
             if start_time.elapsed() > TIMEOUT {
                 info!("{}  receiving timed out", self.id_string);
                 break;
             }
-            if pm.txid == txid {
-                info!("{}  received {:?}", self.id_string, pm);
-                result = Some(pm);
-                break;
+            if let Ok(pm) = self.rx.try_recv() {
+                if pm.txid == txid {
+                    info!("{}  received {:?}", self.id_string, pm);
+                    result = Some(pm);
+                    break;
+                }
             }
         }
-        if let None = result {
-            info!("{}  going to global log", self.id_string);
+        info!("{}  going to global log", self.id_string);
+        while let None = result {
             let oplog_global = OpLog::from_file(format!("{}/coordinator.log", self.logpathbase));
             for offset in (1..(oplog_global.seqno + 1)).rev() {
                 let pm = oplog_global.read(&offset);
@@ -182,7 +185,7 @@ impl Participant {
             }
         }
         trace!("{}::recv_decision exit", self.id_string);
-        result
+        result.unwrap()
     }
 
     ///
@@ -199,10 +202,10 @@ impl Participant {
 
         let x: f64 = random();
         if x < self.success_prob_ops {
-            info!("{}  decided success", self.id_string);
+            info!("{}  operation succeeded", self.id_string);
             result = true;
         } else {
-            info!("{}  decided failure", self.id_string);
+            info!("{}  operation failed", self.id_string);
         }
 
         trace!("{}::perform_operation exit", self.id_string);
@@ -244,8 +247,10 @@ impl Participant {
             senderid = pm.senderid.clone();
             opid = pm.opid;
             if let MessageType::ParticipantVoteCommit = pm.mtype {
-                self.state = ParticipantState::Decided;
+                self.state = ParticipantState::Recovering;
             } else {
+                // flush old messsages
+                while let Ok(_) = self.rx.try_recv() {}
                 self.state = ParticipantState::Quiescent;
             }
         } else {
@@ -257,6 +262,7 @@ impl Participant {
         }
 
         loop {
+            info!("{}  ({:?})", self.id_string, self.state);
             match self.state {
                 ParticipantState::Quiescent => {
                     // get request
@@ -296,10 +302,29 @@ impl Participant {
                 ParticipantState::Decided => {
                     // get final decision, update locally
                     let decision = self.recv_decision(txid);
-                    if let None = decision {
-                        // TODO handle coordinator failure
-                        panic!("{}  NO DECISION IN GLOBAL LOG", self.id_string);
-                        // break;
+                    match decision.mtype {
+                        MessageType::CoordinatorCommit => self.committed += 1,
+                        MessageType::CoordinatorAbort => self.aborted += 1,
+                        MessageType::CoordinatorExit => break,
+                        _ => (),
+                    }
+                    self.log
+                        .append(decision.mtype, txid, senderid.clone(), opid);
+                    self.state = ParticipantState::Quiescent;
+                }
+                ParticipantState::Recovering => {
+                    // get final decision from global log
+                    let mut decision = None;
+                    while let None = decision {
+                        let oplog_global =
+                            OpLog::from_file(format!("{}/coordinator.log", self.logpathbase));
+                        for offset in (1..(oplog_global.seqno + 1)).rev() {
+                            let pm = oplog_global.read(&offset);
+                            if pm.txid == txid {
+                                decision = Some(pm.clone());
+                                break;
+                            }
+                        }
                     }
                     let decision = decision.unwrap();
                     match decision.mtype {
@@ -310,6 +335,8 @@ impl Participant {
                     }
                     self.log
                         .append(decision.mtype, txid, senderid.clone(), opid);
+                    // flush old messsages
+                    while let Ok(_) = self.rx.try_recv() {}
                     self.state = ParticipantState::Quiescent;
                 }
             }
