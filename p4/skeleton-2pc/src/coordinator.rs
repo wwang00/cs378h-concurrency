@@ -33,6 +33,7 @@ pub struct Coordinator {
     pub running: Arc<AtomicBool>,
     logpathbase: String,
     log: OpLog,
+    failure_prob: f64,
     success_prob_msg: f64,
     n_clients: i32,
     n_participants: i32,
@@ -66,6 +67,7 @@ impl Coordinator {
     pub fn new(
         running: Arc<AtomicBool>,
         logpathbase: String,
+        failure_prob: f64,
         success_prob_msg: f64,
         n_clients: i32,
         n_participants: i32,
@@ -75,6 +77,7 @@ impl Coordinator {
             running,
             logpathbase: logpathbase.clone(),
             log: OpLog::new(format!("{}/coordinator.log", logpathbase)),
+            failure_prob,
             success_prob_msg,
             n_clients,
             n_participants,
@@ -337,60 +340,12 @@ impl Coordinator {
                     self.state = CoordinatorState::Quiescent;
                 }
             }
+            let fail: f64 = random();
+            if fail < self.failure_prob {
+                info!("coordinator  FAILURE");
+                return;
+            }
         }
-
-        // while self.running.load(Ordering::SeqCst) {
-        //     // get request
-        //     let request = self.recv_request();
-        //     if let None = request {
-        //         continue;
-        //     }
-        //     let request = request.unwrap();
-        //     let txid = request.txid;
-        //     let senderid = request.senderid;
-        //     let opid = request.opid;
-        //     self.state = CoordinatorState::Armed;
-
-        //     // send request to participants
-        //     let request_msg = ProtocolMessage::generate(
-        //         MessageType::CoordinatorPropose,
-        //         txid,
-        //         senderid.clone(),
-        //         opid,
-        //     );
-        //     for p in 0..self.n_participants as usize {
-        //         let tx = &self.tx_participants[p];
-        //         self.send_unreliable(tx, request_msg.clone());
-        //     }
-        //     self.state = CoordinatorState::Wait;
-
-        //     // get participant votes
-        //     let commit = self.collect_votes(txid);
-        //     let mtype: MessageType;
-        //     let state: CoordinatorState;
-        //     if commit {
-        //         self.committed += 1;
-        //         mtype = MessageType::CoordinatorCommit;
-        //         state = CoordinatorState::Commit;
-        //     } else {
-        //         self.aborted += 1;
-        //         mtype = MessageType::CoordinatorAbort;
-        //         state = CoordinatorState::Abort;
-        //     }
-        //     self.log.append(mtype, txid, senderid.clone(), opid);
-        //     self.state = state;
-
-        //     // send final decision to participants and result to client
-        //     let decision_msg = ProtocolMessage::generate(mtype, txid, senderid.clone(), opid);
-        //     for p in 0..self.n_participants as usize {
-        //         let tx = &self.tx_participants[p];
-        //         self.send_unreliable(tx, decision_msg.clone());
-        //     }
-        //     let client_id = decision_msg.opid % self.n_clients;
-        //     let tx = &self.tx_clients[client_id as usize];
-        //     self.send(tx, decision_msg.clone());
-        //     self.state = CoordinatorState::Quiescent;
-        // }
 
         self.signal_stop();
         self.report_status();

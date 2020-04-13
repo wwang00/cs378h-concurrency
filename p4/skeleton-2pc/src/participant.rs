@@ -338,8 +338,8 @@ impl Participant {
                     self.state = ParticipantState::Quiescent;
                 }
             }
-            let x: f64 = random();
-            if x < self.failure_prob {
+            let fail: f64 = random();
+            if fail < self.failure_prob {
                 info!("{}  FAILURE", self.id_string);
                 return;
             }

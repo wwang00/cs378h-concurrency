@@ -168,6 +168,7 @@ fn run(opts: &tpcoptions::TPCOptions) {
     coordinator = Coordinator::new(
         running.clone(),
         opts.logpath.clone(),
+        opts.failure_probability,
         opts.success_probability_msg,
         opts.num_clients,
         opts.num_participants,
