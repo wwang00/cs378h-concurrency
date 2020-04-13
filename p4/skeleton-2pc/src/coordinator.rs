@@ -47,7 +47,7 @@ pub struct Coordinator {
 }
 
 // static timeout for receiving votes from participants
-static TIMEOUT: Duration = Duration::from_millis(40);
+static TIMEOUT: Duration = Duration::from_millis(100);
 
 ///
 /// Coordinator

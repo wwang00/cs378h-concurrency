@@ -49,7 +49,7 @@ pub struct Participant {
 }
 
 // static timeout for receiving final decision from coordinator
-static TIMEOUT: Duration = Duration::from_millis(80);
+static TIMEOUT: Duration = Duration::from_millis(200);
 
 ///
 /// Participant
@@ -178,7 +178,11 @@ impl Participant {
             let oplog_global = OpLog::from_file(format!("{}/coordinator.log", self.logpathbase));
             for offset in (1..(oplog_global.seqno + 1)).rev() {
                 let pm = oplog_global.read(&offset);
-                if pm.txid == txid {
+                if pm.txid == txid
+                    && (pm.mtype == MessageType::CoordinatorAbort
+                        || pm.mtype == MessageType::CoordinatorCommit)
+                {
+                    info!("{}  received {:?}", self.id_string, pm);
                     result = Some(pm.clone());
                     break;
                 }
@@ -318,7 +322,11 @@ impl Participant {
                             OpLog::from_file(format!("{}/coordinator.log", self.logpathbase));
                         for offset in (1..(oplog_global.seqno + 1)).rev() {
                             let pm = oplog_global.read(&offset);
-                            if pm.txid == txid {
+                            if pm.txid == txid
+                                && (pm.mtype == MessageType::CoordinatorAbort
+                                    || pm.mtype == MessageType::CoordinatorCommit)
+                            {
+                                info!("{}  received {:?}", self.id_string, pm);
                                 decision = Some(pm.clone());
                                 break;
                             }
