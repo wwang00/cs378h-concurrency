@@ -160,7 +160,10 @@ impl Participant {
     ///
     pub fn recv_decision(&self, txid: i32) -> ProtocolMessage {
         trace!("{}::recv_decision...", self.id_string);
-        assert!(self.state == ParticipantState::Confirming);
+        assert!(
+            self.state == ParticipantState::Confirming
+                || self.state == ParticipantState::Recovering
+        );
 
         let mut result = None;
         let start_time = Instant::now();
@@ -304,7 +307,7 @@ impl Participant {
                     self.log.append_pm(vote);
                     self.state = ParticipantState::Confirming;
                 }
-                ParticipantState::Confirming => {
+                ParticipantState::Confirming | ParticipantState::Recovering => {
                     // get final decision, update locally
                     let decision = self.recv_decision(txid);
                     match decision.mtype {
@@ -312,38 +315,11 @@ impl Participant {
                         MessageType::CoordinatorAbort => self.aborted += 1,
                         _ => (),
                     }
-                    self.log
-                        .append(decision.mtype, txid, senderid.clone(), opid);
-                    self.state = ParticipantState::Quiescent;
-                }
-                ParticipantState::Recovering => {
-                    // get final decision from global log
-                    let mut decision = None;
-                    while let None = decision {
-                        let oplog_global =
-                            OpLog::from_file(format!("{}/coordinator.log", self.logpathbase));
-                        for offset in (1..(oplog_global.seqno + 1)).rev() {
-                            let pm = oplog_global.read(&offset);
-                            if pm.txid == txid
-                                && (pm.mtype == MessageType::CoordinatorAbort
-                                    || pm.mtype == MessageType::CoordinatorCommit)
-                            {
-                                info!("{}  received {:?}", self.id_string, pm);
-                                decision = Some(pm.clone());
-                                break;
-                            }
-                        }
+                    self.log.append_pm(decision);
+                    if self.state == ParticipantState::Recovering {
+                        // flush old messsages
+                        while let Ok(_) = self.rx.try_recv() {}
                     }
-                    let decision = decision.unwrap();
-                    match decision.mtype {
-                        MessageType::CoordinatorCommit => self.committed += 1,
-                        MessageType::CoordinatorAbort => self.aborted += 1,
-                        _ => (),
-                    }
-                    self.log
-                        .append(decision.mtype, txid, senderid.clone(), opid);
-                    // flush old messsages
-                    while let Ok(_) = self.rx.try_recv() {}
                     self.state = ParticipantState::Quiescent;
                 }
             }
