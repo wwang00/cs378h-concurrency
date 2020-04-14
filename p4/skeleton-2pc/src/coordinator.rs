@@ -126,8 +126,11 @@ impl Coordinator {
     ///
     pub fn send(&self, sender: &Sender<ProtocolMessage>, pm: ProtocolMessage) -> bool {
         trace!("coordinator::send...");
-        let result: bool = true;
-        sender.send(pm).unwrap();
+        let mut result: bool = true;
+        let sent = sender.send(pm);
+        if let Err(_) = sent {
+            result = false;
+        }
         trace!("coordinator::send exit");
         result
     }
@@ -205,28 +208,6 @@ impl Coordinator {
         }
         trace!("coordinator::collect_votes exit");
         result
-    }
-
-    ///
-    /// signal_stop()
-    /// tell clients, participants to stop
-    ///
-    pub fn signal_stop(&self) {
-        trace!("coordinator::signal_stop");
-        let exit_msg = ProtocolMessage::generate(
-            MessageType::CoordinatorExit,
-            -1,
-            String::from("coordinator"),
-            -1,
-        );
-        for c in 0..self.n_clients as usize {
-            let tx = &self.tx_clients[c];
-            self.send(tx, exit_msg.clone());
-        }
-        for p in 0..self.n_participants as usize {
-            let tx = &self.tx_participants[p];
-            self.send(tx, exit_msg.clone());
-        }
     }
 
     ///
@@ -347,7 +328,6 @@ impl Coordinator {
             }
         }
 
-        self.signal_stop();
         self.report_status();
 
         trace!("coordinator  exiting");

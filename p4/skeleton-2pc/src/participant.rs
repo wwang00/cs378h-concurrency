@@ -109,8 +109,11 @@ impl Participant {
     ///
     pub fn send(&self, pm: ProtocolMessage) -> bool {
         trace!("{}::send...", self.id_string);
-        let result: bool = true;
-        self.tx.send(pm).unwrap();
+        let mut result: bool = true;
+        let sent = self.tx.send(pm);
+        if let Err(_) = sent {
+            result = false;
+        }
         trace!("{}::send exit", self.id_string);
         result
     }
@@ -139,7 +142,7 @@ impl Participant {
     ///
     pub fn recv_request(&self) -> Option<ProtocolMessage> {
         trace!("{}::recv_request...", self.id_string);
-        assert!(self.state != ParticipantState::Voting);
+        assert!(self.state == ParticipantState::Quiescent);
 
         let mut result = None;
         let received = self.rx.recv();
@@ -272,12 +275,12 @@ impl Participant {
                     // get request
                     let request = self.recv_request();
                     if let None = request {
-                        panic!("COORDINATOR DISCONNECTED");
+                        info!("{}  coordinator disconnected", self.id_string);
+                        break;
                     }
                     let request = request.unwrap();
                     match request.mtype {
                         MessageType::CoordinatorPropose => (),
-                        MessageType::CoordinatorExit => break,
                         _ => continue,
                     }
                     txid = request.txid;
@@ -307,7 +310,6 @@ impl Participant {
                     match decision.mtype {
                         MessageType::CoordinatorCommit => self.committed += 1,
                         MessageType::CoordinatorAbort => self.aborted += 1,
-                        MessageType::CoordinatorExit => break,
                         _ => (),
                     }
                     self.log
@@ -336,7 +338,6 @@ impl Participant {
                     match decision.mtype {
                         MessageType::CoordinatorCommit => self.committed += 1,
                         MessageType::CoordinatorAbort => self.aborted += 1,
-                        MessageType::CoordinatorExit => break,
                         _ => (),
                     }
                     self.log
