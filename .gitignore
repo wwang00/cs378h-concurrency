@@ -32,4 +32,4 @@
 *.app
 
 **/.DS_Store
-p4/skeleton-2pc/target
+p4/target
