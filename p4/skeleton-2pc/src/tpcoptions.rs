@@ -18,6 +18,7 @@
 extern crate clap;
 extern crate ctrlc;
 extern crate log;
+extern crate shellexpand;
 extern crate stderrlog;
 use clap::{App, Arg};
 
@@ -51,12 +52,19 @@ impl TPCOptions {
         let default_success_prob_ops = "1.0";
         let default_success_prob_msg = "1.0";
 
-        let default_logpath = "/tmp";
+        let default_logpath = shellexpand::tilde("~/tmp/").clone();
 
         let matches = App::new("cs380p-2pc")
             .version("0.1.0")
             .author("Chris Rossbach <rossbach@cs.utexas.edu>")
             .about("2pc exercise written in Rust")
+            .arg(
+                Arg::with_name("logpath")
+                    .short("l")
+                    .required(false)
+                    .takes_value(true)
+                    .help("specifies path to directory where logs are produced"),
+            )
             .arg(
                 Arg::with_name("failure_probability")
                     .short("f")
@@ -151,7 +159,7 @@ impl TPCOptions {
             .unwrap_or(default_verbosity)
             .parse::<usize>()
             .unwrap();
-        let _logpath = matches.value_of("logpath").unwrap_or(default_logpath);
+        let _logpath = matches.value_of("logpath").unwrap_or(&default_logpath);
 
         match _mode.as_ref() {
             "run" => {}

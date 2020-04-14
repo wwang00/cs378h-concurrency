@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
-static CRASH_TIMEOUT: Duration = Duration::from_millis(100);
+static CRASH_TIMEOUT: Duration = Duration::from_millis(200);
 
 ///
 /// register_clients()
@@ -194,6 +194,7 @@ fn run(opts: &tpcoptions::TPCOptions) {
     let coordinator_handle = thread::spawn(move || {
         while coordinator.running.load(Ordering::SeqCst) {
             coordinator.protocol();
+            sleep(CRASH_TIMEOUT);
         }
     });
     handles.push(coordinator_handle);
