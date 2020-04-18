@@ -8,7 +8,7 @@ else
     MODE=check
 fi
 
-./target/debug/cs380p-2pc -f 0.02 -s .95 -S .99 -c 1 -p 8 -r 50 -v 5 -m $MODE
+./target/debug/cs380p-2pc -f 0.0 -s .95 -S .99 -c 1 -p 12 -r 100 -v 4 -m $MODE
 
 if [ "$MODE" == "run" ]; then
     ./run.sh c
