@@ -35,10 +35,12 @@ void PointMass::join(const PointMass &pm) {
 }
 
 Cell::Cell(Point loc, float dim, int parent)
-    : state(CellState::Empty), loc(loc), dim(dim), parent(parent),
-      child_base(0), com(PointMass{Point{0, 0}, 0}) {}
+    : state(CellState::Empty), loc(loc), vel(Point()), acc(Point()), dim(dim),
+      parent(parent), child_base(0), com(PointMass()) {}
 
-Tree::Tree() { cells.push_back(Cell(Point{0, 0}, MAX_DIM, -1)); }
+Tree::Tree(float theta, float dt) : theta(theta), dt(dt) {
+	cells.push_back(Cell(Point(), MAX_DIM, -1));
+}
 
 void Tree::insert(PointMass particle) {
 	cout << "Tree::insert called......" << endl;
@@ -80,10 +82,12 @@ void Tree::insert(PointMass particle) {
 
 			// move current cell's particle into its subcell
 			auto qc = quadrant(curr.com.p, mid);
-			auto curr_moved = cells[curr.child_base + qc];
+			auto moved_idx = curr.child_base + qc;
+			auto curr_moved = cells[moved_idx];
 			curr_moved.state = CellState::Full;
 			curr_moved.com = curr.com;
-			cells[curr.child_base + qc] = curr_moved;
+			cells[moved_idx] = curr_moved;
+			curr.com = PointMass();
 
 			// go straight to case Split
 			curr.state = CellState::Split;
@@ -91,10 +95,6 @@ void Tree::insert(PointMass particle) {
 		}
 		case CellState::Split: {
 			cout << "Tree::insert switch state Split" << endl;
-
-			// update split cell's com
-			curr.com.join(particle);
-			cells[cid] = curr;
 
 			// recurse into the right quadrant
 			auto qp = quadrant(particle.p, mid);
@@ -105,6 +105,46 @@ void Tree::insert(PointMass particle) {
 			cout << "Tree::insert BAD STATE" << endl;
 			return;
 		}
+	}
+}
+
+void Tree::compute_coms() {
+	// find level-order traversal
+	vector<int> order;
+	queue<int> q;
+	q.push(0);
+	while(!q.empty()) {
+		auto c = q.front();
+		q.pop();
+		auto cell = cells[c];
+		if(cell.state != CellState::Split)
+			continue;
+
+		// add Split cell to level order
+		order.push_back(c);
+		auto base = cell.child_base;
+		for(int ch = base; ch < base + 4; ch++) {
+			q.push(ch);
+		}
+	}
+
+	// calculate coms in reverse level-order
+	for(auto cit = order.rbegin(); cit != order.rend(); cit++) {
+		auto c = *cit;
+		auto cell = cells[c];
+		auto base = cell.child_base;
+		auto com = PointMass();
+		for(int ch = base; ch < base + 4; ch++) {
+			auto child = cells[ch];
+			auto comc = child.com;
+			com.p.x += comc.p.x * comc.m;
+			com.p.y += comc.p.y * comc.m;
+			com.m += comc.m;
+		}
+		com.p.x /= com.m;
+		com.p.y /= com.m;
+		cell.com = com;
+		cells[c] = cell;
 	}
 }
 

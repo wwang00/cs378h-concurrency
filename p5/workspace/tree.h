@@ -5,6 +5,8 @@
 #include <vector>
 
 #define MAX_DIM 4.0
+#define G 0.0001
+#define MIN_R 0.03
 
 struct Point {
 	float x;
@@ -26,7 +28,7 @@ enum CellState { Empty, Full, Split };
 
 struct Cell {
 	CellState state;
-	Point loc;
+	Point loc, vel, acc;
 	float dim;
 	int parent;
 	int child_base;
@@ -39,11 +41,15 @@ struct Cell {
 
 class Tree {
 	std::vector<Cell> cells;
+	const float theta;
+	const float dt;
 
-  public:
-	Tree();
+public:
+	Tree(float theta, float dt);
+
 	void insert(PointMass particle);
 	void compute_coms();
+	void compute_forces();
 
 	std::string to_string();
 };

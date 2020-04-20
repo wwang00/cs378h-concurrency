@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
 	// Print off a hello world message
 	printf("ENTER processor %d out of %d processors\n", R, M);
 
-	Tree tree;
+	Tree tree(stof(args["-t"]), stof(args["-d"]));
 	vector<PointMass> particles;
 	PointMass com{};
 	for(int i = 0; i < N; i++) {
@@ -42,9 +42,10 @@ int main(int argc, char **argv) {
 		com.m += pm.m;
 		tree.insert(pm);
 	}
-
 	com.p.x /= com.m;
 	com.p.y /= com.m;
+
+	tree.compute_coms();
 
 	cout << "particles: {";
 	for(int p = 0; p < N; p++) {
@@ -54,7 +55,7 @@ int main(int argc, char **argv) {
 
 	cout << "tree" << endl << tree.to_string() << endl;
 
-	cout << "com " << com.to_string() << endl;
+	cout << "true com " << com.to_string() << endl;
 
 	printf("EXIT processor %d out of %d processors\n", R, M);
 
