@@ -1,27 +1,42 @@
+#include <iostream>
 #include <mpi.h>
 #include <stdio.h>
+#include <unordered_map>
+#include <unordered_set>
+
+#include "argparse.h"
+#include "tree.h"
+
+using namespace std;
+
+unordered_set<string> FLAGS{};
+unordered_set<string> OPTS{"-i", "-o", "-s", "-t", "-d"};
+
+float random(int m) { return (float)rand() / RAND_MAX * m; }
 
 int main(int argc, char **argv) {
-  // Initialize the MPI environment
-  MPI_Init(NULL, NULL);
+	MPI_Init(&argc, &argv);
+	auto args = parse_args(argc, argv, FLAGS, OPTS);
 
-  // Get the number of processes
-  int world_size;
-  MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+	// Get the number of processes
+	int M;
+	MPI_Comm_size(MPI_COMM_WORLD, &M);
 
-  // Get the rank of the process
-  int world_rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	// Get the rank of the process
+	int R;
+	MPI_Comm_rank(MPI_COMM_WORLD, &R);
 
-  // Get the name of the processor
-  char processor_name[MPI_MAX_PROCESSOR_NAME];
-  int name_len;
-  MPI_Get_processor_name(processor_name, &name_len);
+	// Print off a hello world message
+	printf("Hello world from processor %d out of %d processors\n", R, M);
 
-  // Print off a hello world message
-  printf("Hello world from processor %s, rank %d out of %d processors\n",
-         processor_name, world_rank, world_size);
+	Tree tree;
+	for(int i = 0; i < 8; i++)
+		tree.insert(PointMass{Point{random(4), random(4)}, random(10)});
 
-  // Finalize the MPI environment.
-  MPI_Finalize();
+	cout << "tree" << endl << tree.to_string() << endl;
+
+	cout << "EXIT" << endl;
+
+	// Finalize the MPI environment.
+	MPI_Finalize();
 }

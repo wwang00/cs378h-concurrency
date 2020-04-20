@@ -1,14 +1,15 @@
 PROG = nbody
 CC = mpicxx
-CPPFLAGS = -Wall -O3
-OBJS = main.o
+CPPFLAGS = -std=c++11 -Wall -O3
+LDFLAGS = -std=c++11
+OBJS = main.o argparse.o tree.o
 
 all : $(PROG)
 
 $(PROG) : $(OBJS)
 	$(CC) $(LDFLAGS) -o $(PROG) $(OBJS)
 
-%.o : %.c
+%.o : %.cpp %.h
 	$(CC) $(CPPFLAGS) -c $<
 
 .PHONY : clean
