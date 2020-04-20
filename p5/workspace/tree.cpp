@@ -1,6 +1,7 @@
 #include "tree.h"
 
 #include <iostream>
+#include <queue>
 #include <sstream>
 #include <stdio.h>
 #include <string>
@@ -23,6 +24,14 @@ int quadrant(Point p, Point m) {
 		return 2;
 	}
 	return 3;
+}
+
+void PointMass::join(const PointMass &pm) {
+	auto mj = m + pm.m;
+	auto xj = (p.x * m + pm.p.x * pm.m) / mj;
+	auto yj = (p.y * m + pm.p.y * pm.m) / mj;
+	p = Point{xj, yj};
+	m = mj;
 }
 
 Cell::Cell(Point loc, float dim, int parent)
@@ -83,7 +92,11 @@ void Tree::insert(PointMass particle) {
 		case CellState::Split: {
 			cout << "Tree::insert switch state Split" << endl;
 
-			// find the right quadrant to recurse into
+			// update split cell's com
+			curr.com.join(particle);
+			cells[cid] = curr;
+
+			// recurse into the right quadrant
 			auto qp = quadrant(particle.p, mid);
 			cid = curr.child_base + qp;
 			break;
@@ -101,13 +114,13 @@ void Tree::insert(PointMass particle) {
 
 string Point::to_string() {
 	char buf[1024];
-	sprintf(buf, "(%.5f, %.5f)", x, y);
+	sprintf(buf, "(%.3f, %.3f)", x, y);
 	return string(buf);
 }
 
 string PointMass::to_string() {
 	char buf[1024];
-	sprintf(buf, "{ loc: %s, mass: %.5f }", p.to_string().c_str(), m);
+	sprintf(buf, "{ loc: %s, mass: %.3f }", p.to_string().c_str(), m);
 	return string(buf);
 }
 
@@ -133,9 +146,9 @@ string Cell::to_string() {
 	auto loc_c = loc.to_string().c_str();
 	auto com_c = com.to_string().c_str();
 	sprintf(buf,
-	        "{ state: %s, parent: %d, child_base: %d, loc: %s, dim: %.5f, com: "
-	        "%s }",
-	        state_c, parent, child_base, loc_c, dim, com_c);
+	        "{ state: %s,\tloc: %s,\tdim: %.3f,\tparent: %d,\tchild_base: "
+	        "%d,\tcom: %s }",
+	        state_c, loc_c, dim, parent, child_base, com_c);
 	return string(buf);
 }
 

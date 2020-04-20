@@ -7,15 +7,17 @@
 #define MAX_DIM 4.0
 
 struct Point {
-    float x;
-    float y;
+	float x;
+	float y;
 
-    std::string to_string();
+	std::string to_string();
 };
 
 struct PointMass {
-    Point p;
+	Point p;
 	float m;
+
+	void join(const PointMass &pm);
 
 	std::string to_string();
 };
@@ -41,6 +43,7 @@ class Tree {
   public:
 	Tree();
 	void insert(PointMass particle);
+	void compute_coms();
 
 	std::string to_string();
 };
