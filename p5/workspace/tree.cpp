@@ -34,19 +34,31 @@ void PointMass::join(const PointMass &pm) {
 	m = mj;
 }
 
+Particle::Particle(PointMass pm, Point vel, Point force)
+    : pm(pm), vel(vel), force(force) {}
+
 Cell::Cell(Point loc, float dim, int parent)
-    : state(CellState::Empty), loc(loc), vel(Point()), acc(Point()), dim(dim),
-      parent(parent), child_base(0), com(PointMass()) {}
+    : state(CellState::Empty), loc(loc), dim(dim), parent(parent),
+      child_base(-1), com(PointMass()), pid(-1) {}
 
 Tree::Tree(float theta, float dt) : theta(theta), dt(dt) {
 	cells.push_back(Cell(Point(), MAX_DIM, -1));
 }
 
-void Tree::insert(PointMass particle) {
+void Tree::insert(Particle particle) {
 	cout << "Tree::insert called......" << endl;
 	cout << "particle " << particle.to_string() << endl;
 
-	int cid = 0; // current cell id in tree traversal
+	auto pp = particle.pm.p;
+
+	// insert particle into particles
+	if(pp.x < 0 || pp.x > MAX_DIM || pp.y < 0 || pp.y > MAX_DIM)
+		return;
+	int pid = particles.size();
+	particles.push_back(particle);
+
+	// update cells
+	int cid = 0;
 
 	while(true) {
 		cout << "Tree::insert cid " << cid << endl;
@@ -64,7 +76,7 @@ void Tree::insert(PointMass particle) {
 
 			// found a place to insert
 			curr.state = CellState::Full;
-			curr.com = particle;
+			curr.pid = pid;
 			cells[cid] = curr;
 
 			cout << "Tree::insert exited......" << endl;
@@ -81,13 +93,13 @@ void Tree::insert(PointMass particle) {
 			cells.push_back(Cell(Point{xm, ym}, dim_half, cid));
 
 			// move current cell's particle into its subcell
-			auto qc = quadrant(curr.com.p, mid);
+			auto qc = quadrant(particles[curr.pid].pm.p, mid);
 			auto moved_idx = curr.child_base + qc;
 			auto curr_moved = cells[moved_idx];
 			curr_moved.state = CellState::Full;
-			curr_moved.com = curr.com;
+			curr_moved.pid = curr.pid;
 			cells[moved_idx] = curr_moved;
-			curr.com = PointMass();
+			curr.pid = -1;
 
 			// go straight to case Split
 			curr.state = CellState::Split;
@@ -97,7 +109,7 @@ void Tree::insert(PointMass particle) {
 			cout << "Tree::insert switch state Split" << endl;
 
 			// recurse into the right quadrant
-			auto qp = quadrant(particle.p, mid);
+			auto qp = quadrant(pp, mid);
 			cid = curr.child_base + qp;
 			break;
 		}
@@ -117,12 +129,14 @@ void Tree::compute_coms() {
 		auto c = q.front();
 		q.pop();
 		auto cell = cells[c];
-		if(cell.state != CellState::Split)
+		if(cell.state == CellState::Empty)
 			continue;
 
-		// add Split cell to level order
+		// add Full or Split cell to level order
 		order.push_back(c);
 		auto base = cell.child_base;
+		if(base < 0)
+			continue;
 		for(int ch = base; ch < base + 4; ch++) {
 			q.push(ch);
 		}
@@ -132,17 +146,21 @@ void Tree::compute_coms() {
 	for(auto cit = order.rbegin(); cit != order.rend(); cit++) {
 		auto c = *cit;
 		auto cell = cells[c];
-		auto base = cell.child_base;
 		auto com = PointMass();
-		for(int ch = base; ch < base + 4; ch++) {
-			auto child = cells[ch];
-			auto comc = child.com;
-			com.p.x += comc.p.x * comc.m;
-			com.p.y += comc.p.y * comc.m;
-			com.m += comc.m;
+		if(cell.state == CellState::Full) {
+			com = particles[cell.pid].pm;
+		} else { // Split
+			auto base = cell.child_base;
+			for(int ch = base; ch < base + 4; ch++) {
+				auto child = cells[ch];
+				auto comc = child.com;
+				com.p.x += comc.p.x * comc.m;
+				com.p.y += comc.p.y * comc.m;
+				com.m += comc.m;
+			}
+			com.p.x /= com.m;
+			com.p.y /= com.m;
 		}
-		com.p.x /= com.m;
-		com.p.y /= com.m;
 		cell.com = com;
 		cells[c] = cell;
 	}
@@ -200,4 +218,11 @@ string Tree::to_string() {
 	}
 	ss << "\n}";
 	return ss.str();
+}
+
+string Particle::to_string() {
+	char buf[1024];
+	sprintf(buf, "{ pm: %s, vel: %s, force: %s }", pm.to_string().c_str(),
+	        vel.to_string().c_str(), force.to_string().c_str());
+	return string(buf);
 }

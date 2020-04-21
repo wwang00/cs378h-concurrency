@@ -24,15 +24,26 @@ struct PointMass {
 	std::string to_string();
 };
 
+struct Particle {
+	PointMass pm;
+	Point vel, force;
+
+	Particle(PointMass pm);
+	Particle(PointMass pm, Point vel, Point force);
+
+	std::string to_string();
+};
+
 enum CellState { Empty, Full, Split };
 
 struct Cell {
 	CellState state;
-	Point loc, vel, acc;
+	Point loc;
 	float dim;
 	int parent;
-	int child_base;
+	int child_base; // Split
 	PointMass com;
+	int pid; // Full
 
 	Cell(Point loc, float dim, int parent);
 
@@ -40,14 +51,18 @@ struct Cell {
 };
 
 class Tree {
-	std::vector<Cell> cells;
 	const float theta;
 	const float dt;
+
+	int n_cells;
+	int n_particles;
+	std::vector<Cell> cells;
+	std::vector<Particle> particles;
 
 public:
 	Tree(float theta, float dt);
 
-	void insert(PointMass particle);
+	void insert(Particle particle);
 	void compute_coms();
 	void compute_forces();
 

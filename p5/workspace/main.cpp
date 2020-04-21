@@ -32,18 +32,21 @@ int main(int argc, char **argv) {
 	printf("ENTER processor %d out of %d processors\n", R, M);
 
 	Tree tree(stof(args["-t"]), stof(args["-d"]));
-	vector<PointMass> particles;
+	vector<Particle> particles;
 	PointMass com{};
 	for(int i = 0; i < N; i++) {
 		PointMass pm{Point{random(4), random(4)}, random(10)};
-		particles.push_back(pm);
+		Particle particle = Particle{pm, Point(), Point()};
+		particles.push_back(particle);
 		com.p.x += pm.p.x * pm.m;
 		com.p.y += pm.p.y * pm.m;
 		com.m += pm.m;
-		tree.insert(pm);
+		tree.insert(particle);
 	}
 	com.p.x /= com.m;
 	com.p.y /= com.m;
+
+	cout << "tree" << endl << tree.to_string() << endl;
 
 	tree.compute_coms();
 
