@@ -11,7 +11,7 @@
 
 using namespace std;
 
-unordered_set<string> FLAGS{"-n"};
+unordered_set<string> FLAGS{};
 unordered_set<string> OPTS{"-i", "-o", "-s", "-t", "-d"};
 
 int M;
@@ -33,55 +33,75 @@ int main(int argc, char **argv) {
 
 	ifstream ifile(args["-i"]);
 
-	// init tree
+	// init local tree
 	ifile >> n_particles;
 	auto tree = Tree();
 
-	// read particle start configurations
-	for(int p = 0; p < n_particles; p++) {
-		auto particle = Particle();
-		int id;
-		ifile >> id >> particle.pm.p.x >> particle.pm.p.y >> particle.pm.m >>
-		    particle.vel.x >> particle.vel.y;
-		tree.particles[p] = particle;
+	if(R == 0) {
+		// read particle start configurations
+		for(int p = 0; p < n_particles; p++) {
+			auto particle = Particle();
+			int id;
+			ifile >> id >> particle.pm.p.x >> particle.pm.p.y >>
+			    particle.pm.m >> particle.vel.x >> particle.vel.y;
+			tree.particles[p] = particle;
+		}
 	}
 
-	// do work
-	auto t0 = MPI_Wtime();
-	if(args.count("-n")) {
+	// sequential
+	if(M == 1) {
+		// do work
+		auto t0 = MPI_Wtime();
 		for(int s = 0; s < stoi(args["-s"]); s++) {
-			tree.build();
+			tree.build_seq();
 			tree.compute_coms_seq();
 			tree.compute_forces_seq();
 			tree.update_seq();
 		}
+		auto t1 = MPI_Wtime();
+		cout << (t1 - t0) << endl;
 	} else {
-		for(int s = 0; s < stoi(args["-s"]); s++) {
-			tree.build();
-			tree.compute_coms();
-			tree.compute_forces();
-			tree.update();
+		if(R == 0) {
+			// do work
+			auto t0 = MPI_Wtime();
+			for(int s = 0; s < stoi(args["-s"]); s++) {
+				tree.build_master();
+				tree.compute_coms_master();
+				tree.compute_forces_master();
+				tree.update_master();
+			}
+			auto t1 = MPI_Wtime();
+			cout << (t1 - t0) << endl;
+		} else {
+			// do work
+			for(int s = 0; s < stoi(args["-s"]); s++) {
+				tree.build();
+				tree.compute_coms();
+				tree.compute_forces();
+				tree.update();
+			}
 		}
 	}
 
-	auto t1 = MPI_Wtime();
-	cout << (t1 - t0) << endl;
+	// write results
+	if(R == 0) {
+		cout << tree.to_string() << endl;
 
-	cout << tree.to_string() << endl;
+		ofstream ofile(args["-o"]);
+		ofile << std::scientific;
+		ofile << n_particles << endl;
 
-	ofstream ofile(args["-o"]);
-	ofile << std::scientific;
-	ofile << n_particles << endl;
+		for(int p = 0; p < n_particles; p++) {
+			auto particle = tree.particles[p];
+			ofile << p << "\t" << particle.pm.p.x << "\t" << particle.pm.p.y
+			      << "\t" << particle.pm.m << "\t" << particle.vel.x << "\t"
+			      << particle.vel.y << endl;
+		}
 
-	for(int p = 0; p < n_particles; p++) {
-		auto particle = tree.particles[p];
-		ofile << p << "\t" << particle.pm.p.x << "\t" << particle.pm.p.y << "\t"
-		      << particle.pm.m << "\t" << particle.vel.x << "\t"
-		      << particle.vel.y << endl;
+		ofile.close();
 	}
 
 	ifile.close();
-	ofile.close();
 
 	// Finalize the MPI environment.
 	MPI_Finalize();

@@ -59,14 +59,19 @@ class Tree {
 public:
 	std::vector<Particle> particles;
 
-    Tree();
+	Tree();
 
 	void build();
-
 	void compute_coms();
 	void compute_forces();
 	void update();
 
+	void build_master();
+	void compute_coms_master();
+	void compute_forces_master();
+	void update_master();
+
+	void build_seq();
 	void compute_coms_seq();
 	void compute_forces_seq();
 	void update_seq();

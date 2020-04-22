@@ -67,6 +67,70 @@ Tree::Tree() { particles.resize(n_particles); }
 void Tree::build() {
 	printf("Tree::build called......\n");
 
+	if(R > 0) {
+		// recv cells
+		return;
+	}
+	// build cells and send
+
+	printf("Tree::build exited......\n");
+}
+
+void Tree::compute_coms() {
+	printf("Tree::compute_coms called......\n");
+
+	for(int c = R; c < cells.size(); c += M) {
+		// if cell is Full, send com
+		continue;
+		// recv cell child coms
+	}
+
+	printf("Tree::compute_coms exited......\n");
+}
+
+void Tree::compute_forces() {
+	printf("Tree::compute_forces called......\n");
+
+	printf("Tree::compute_forces exited......\n");
+}
+
+void Tree::update() {}
+
+void Tree::build_master() {
+	printf("Tree::build called......\n");
+
+	if(R > 0) {
+		// recv cells
+		return;
+	}
+	// build cells and send
+
+	printf("Tree::build exited......\n");
+}
+
+void Tree::compute_coms_master() {
+	printf("Tree::compute_coms called......\n");
+
+	for(int c = R; c < cells.size(); c += M) {
+		// if cell is Full, send com
+		continue;
+		// recv cell child coms
+	}
+
+	printf("Tree::compute_coms exited......\n");
+}
+
+void Tree::compute_forces_master() {
+	printf("Tree::compute_forces called......\n");
+
+	printf("Tree::compute_forces exited......\n");
+}
+
+void Tree::update_master() {}
+
+void Tree::build_seq() {
+	printf("Tree::build called......\n");
+
 	cells.clear();
 	cells.push_back(Cell(Point(), MAX_DIM, -1));
 	for(int p = 0; p < n_particles; p++) {
@@ -139,19 +203,6 @@ void Tree::build() {
 
 	printf("Tree::build exited......\n");
 }
-
-void Tree::compute_coms() {
-	printf("Tree::compute_coms called......\n");
-
-	for(int c = R; c < cells.size(); c += M) {
-	}
-
-	printf("Tree::compute_coms exited......\n");
-}
-
-void Tree::compute_forces() {}
-
-void Tree::update() {}
 
 void Tree::compute_coms_seq() {
 	printf("Tree::compute_coms called......\n");
