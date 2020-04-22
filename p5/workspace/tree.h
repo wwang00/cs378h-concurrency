@@ -70,6 +70,7 @@ public:
 	void build();
 	void compute_coms();
 	void compute_forces();
+    void update();
 
 	std::string to_string();
 };

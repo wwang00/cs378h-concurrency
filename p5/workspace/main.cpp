@@ -36,7 +36,6 @@ int main(int argc, char **argv) {
 	// init tree
 	int n_particles;
 	ifile >> n_particles;
-    cout << "n_particles " << n_particles << endl;
 	Tree tree(stof(args["-t"]), stof(args["-d"]), n_particles);
 
 	// read particle start configurations
@@ -55,6 +54,7 @@ int main(int argc, char **argv) {
 		tree.build();
 		tree.compute_coms();
 		tree.compute_forces();
+        tree.update();
 	}
 
     cout << tree.to_string() << endl;

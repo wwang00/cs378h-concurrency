@@ -7,6 +7,6 @@ OFILE=$PWD/output/$FILE.txt
 cd workspace
 make all
 
-mpiexec -n 1 ./nbody -i $IFILE -o $OFILE -s 1 -t 0.1 -d 0.005
+mpiexec -n 1 ./nbody -i $IFILE -o $OFILE -s 1 -t 0.86010 -d 0.005
 
 cd ..

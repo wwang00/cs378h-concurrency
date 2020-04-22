@@ -31,9 +31,9 @@ bool Tree::mac(Particle p, Cell c) {
 	return c.dim / p.pm.p.diff(c.com.p).mag() < theta;
 }
 
-inline Point Point::diff(Point p) { return Point{p.x - x, p.y - y}; }
+Point Point::diff(Point p) { return Point{p.x - x, p.y - y}; }
 
-inline float Point::mag() { return sqrtf(x * x + y * y); }
+float Point::mag() { return sqrtf(x * x + y * y); }
 
 inline void Point::add(Point p) {
 	x += p.x;
@@ -198,6 +198,10 @@ void Tree::compute_forces() {
 	queue<int> q; // queue of cell ids
 	for(int p = 0; p < particles.size(); p++) {
 		auto particle = particles[p];
+		if(particle.pm.m < 0)
+			continue;
+
+		// compute force
 		auto force = Point();
 		q.push(0);
 		while(!q.empty()) {
@@ -213,7 +217,8 @@ void Tree::compute_forces() {
 			}
 			// Split
 			if(mac(particle, cell)) {
-				cout << "mac satisfied for particle " << p << " cell " << c << endl;
+				cout << "mac satisfied for particle " << p << " cell " << c
+				     << endl;
 				force.add(particle.pm.force(cell.com));
 				continue;
 			}
@@ -227,6 +232,34 @@ void Tree::compute_forces() {
 	}
 
 	cout << "Tree::compute_forces exited......" << endl;
+}
+
+void Tree::update() {
+	cout << "Tree::update called......" << endl;
+
+	for(int p = 0; p < n_particles; p++) {
+		auto particle = particles[p];
+		if(particle.pm.m < 0)
+			continue;
+		auto ax_dt_2 = 0.5f * (particle.force.x / particle.pm.m) * dt;
+		auto ay_dt_2 = 0.5f * (particle.force.y / particle.pm.m) * dt;
+		Point loc_new{particle.pm.p.x + (particle.vel.x + ax_dt_2) * dt,
+		              particle.pm.p.y + (particle.vel.y + ay_dt_2) * dt};
+		Point vel_new{particle.vel.x + ax_dt_2, particle.vel.y + ay_dt_2};
+		particle.pm.p = loc_new;
+		particle.vel = vel_new;
+
+		// handle lost particles
+		if(loc_new.x < 0 || loc_new.x > MAX_DIM || loc_new.y < 0 ||
+		   loc_new.y > MAX_DIM) {
+			cout << "particle " << p << " was lost" << endl;
+			particle.pm.m = -1;
+		}
+
+		particles[p] = particle;
+	}
+
+	cout << "Tree::update exited......" << endl;
 }
 
 ///////////////
