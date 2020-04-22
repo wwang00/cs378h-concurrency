@@ -11,61 +11,77 @@
 
 using namespace std;
 
-unordered_set<string> FLAGS{};
+unordered_set<string> FLAGS{"-n"};
 unordered_set<string> OPTS{"-i", "-o", "-s", "-t", "-d"};
+
+int M;
+int R;
+float theta;
+float dt;
+int n_particles;
 
 float random(float m) { return (float)rand() / (float)RAND_MAX * m; }
 
 int main(int argc, char **argv) {
 	MPI_Init(&argc, &argv);
-	auto args = parse_args(argc, argv, FLAGS, OPTS);
-
-	// Get the number of processes
-	int M;
 	MPI_Comm_size(MPI_COMM_WORLD, &M);
-
-	// Get the rank of the process
-	int R;
 	MPI_Comm_rank(MPI_COMM_WORLD, &R);
 
-	// Print off a hello world message
-	printf("ENTER processor %d out of %d processors\n", R, M);
+	auto args = parse_args(argc, argv, FLAGS, OPTS);
+	theta = stof(args["-t"]);
+	dt = stof(args["-d"]);
 
 	ifstream ifile(args["-i"]);
 
 	// init tree
-	int n_particles;
 	ifile >> n_particles;
-	Tree tree(stof(args["-t"]), stof(args["-d"]), n_particles);
+	auto tree = Tree();
 
 	// read particle start configurations
 	for(int p = 0; p < n_particles; p++) {
-		Particle particle;
+		auto particle = Particle();
 		int id;
 		ifile >> id >> particle.pm.p.x >> particle.pm.p.y >> particle.pm.m >>
 		    particle.vel.x >> particle.vel.y;
-		particle.force = Point();
-        printf("inserting particle %s\n", particle.to_string().c_str());
 		tree.particles[p] = particle;
 	}
 
-	for(int s = 0; s < stoi(args["-s"]); s++) {
-        printf("begin iteration %d......\n", s);
-		tree.build();
-		tree.compute_coms();
-		tree.compute_forces();
-        tree.update();
+	// do work
+	auto t0 = MPI_Wtime();
+	if(args.count("-n")) {
+		for(int s = 0; s < stoi(args["-s"]); s++) {
+			tree.build();
+			tree.compute_coms_seq();
+			tree.compute_forces_seq();
+			tree.update_seq();
+		}
+	} else {
+		for(int s = 0; s < stoi(args["-s"]); s++) {
+			tree.build();
+			tree.compute_coms();
+			tree.compute_forces();
+			tree.update();
+		}
 	}
 
-    cout << tree.to_string() << endl;
+	auto t1 = MPI_Wtime();
+	cout << (t1 - t0) << endl;
 
-	cout << "particles after: {";
+	cout << tree.to_string() << endl;
+
+	ofstream ofile(args["-o"]);
+	ofile << std::scientific;
+	ofile << n_particles << endl;
+
 	for(int p = 0; p < n_particles; p++) {
-		printf("\n%d\t%s", p, tree.particles[p].to_string().c_str());
+		auto particle = tree.particles[p];
+		ofile << p << "\t" << particle.pm.p.x << "\t" << particle.pm.p.y << "\t"
+		      << particle.pm.m << "\t" << particle.vel.x << "\t"
+		      << particle.vel.y << endl;
 	}
-	cout << "\n}" << endl;
 
-	printf("EXIT processor %d out of %d processors\n", R, M);
+	ifile.close();
+	ofile.close();
 
 	// Finalize the MPI environment.
 	MPI_Finalize();

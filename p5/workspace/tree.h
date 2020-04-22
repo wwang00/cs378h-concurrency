@@ -4,9 +4,7 @@
 #include <string>
 #include <vector>
 
-#define MAX_DIM 4.0
-#define G 0.0001f
-#define MIN_R 0.03f
+#include "globals.h"
 
 struct Point {
 	float x;
@@ -54,10 +52,6 @@ struct Cell {
 };
 
 class Tree {
-	const float theta;
-	const float dt;
-	const int n_particles;
-
 	std::vector<Cell> cells;
 
 	bool mac(Particle p, Cell c);
@@ -65,12 +59,17 @@ class Tree {
 public:
 	std::vector<Particle> particles;
 
-	Tree(float theta, float dt, int n_particles);
+    Tree();
 
 	void build();
+
 	void compute_coms();
 	void compute_forces();
-    void update();
+	void update();
+
+	void compute_coms_seq();
+	void compute_forces_seq();
+	void update_seq();
 
 	std::string to_string();
 };

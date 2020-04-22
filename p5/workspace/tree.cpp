@@ -62,18 +62,15 @@ Cell::Cell(Point loc, float dim, int parent)
     : state(CellState::Empty), loc(loc), dim(dim), parent(parent),
       child_base(-1), com(PointMass()), pid(-1) {}
 
-Tree::Tree(float theta, float dt, int n_particles)
-    : theta(theta), dt(dt), n_particles(n_particles) {
-	particles.resize(n_particles);
-}
+Tree::Tree() { particles.resize(n_particles); }
 
 void Tree::build() {
-	cout << "Tree::build called......" << endl;
+	printf("Tree::build called......\n");
 
 	cells.clear();
 	cells.push_back(Cell(Point(), MAX_DIM, -1));
 	for(int p = 0; p < n_particles; p++) {
-		cout << "particle " << p << endl;
+		printf("particle %d\n", p);
 		auto particle = particles[p];
 		if(particle.pm.m < 0)
 			continue;
@@ -82,7 +79,7 @@ void Tree::build() {
 		int cid = 0;
 		bool working = true;
 		while(working) {
-			cout << "\tat cid " << cid << endl;
+			printf("\tat cid %d\n", cid);
 			auto curr = cells[cid];
 			auto dim_half = curr.dim / 2;
 			auto xc = curr.loc.x;
@@ -93,7 +90,7 @@ void Tree::build() {
 
 			switch(curr.state) {
 			case CellState::Empty: {
-				cout << "\tswitch state Empty" << endl;
+				printf("\tswitch state Empty\n");
 
 				// found a place to insert
 				curr.state = CellState::Full;
@@ -103,7 +100,7 @@ void Tree::build() {
 				break;
 			}
 			case CellState::Full: {
-				cout << "\tswitch state Full" << endl;
+				printf("\tswitch state Full\n");
 
 				// split and make empty subcells
 				curr.child_base = cells.size();
@@ -126,7 +123,7 @@ void Tree::build() {
 				cells[cid] = curr;
 			}
 			case CellState::Split: {
-				cout << "\tswitch state Split" << endl;
+				printf("\tswitch state Split\n");
 
 				// recurse into the right quadrant
 				auto qp = quadrant(particle.pm.p, mid);
@@ -134,17 +131,30 @@ void Tree::build() {
 				break;
 			}
 			default:
-				cout << "Tree::build BAD STATE" << endl;
+				printf("Tree::build BAD STATE\n");
 				return;
 			}
 		}
 	}
 
-	cout << "Tree::build exited......" << endl;
+	printf("Tree::build exited......\n");
 }
 
 void Tree::compute_coms() {
-	cout << "Tree::compute_coms called......" << endl;
+	printf("Tree::compute_coms called......\n");
+
+	for(int c = R; c < cells.size(); c += M) {
+	}
+
+	printf("Tree::compute_coms exited......\n");
+}
+
+void Tree::compute_forces() {}
+
+void Tree::update() {}
+
+void Tree::compute_coms_seq() {
+	printf("Tree::compute_coms called......\n");
 
 	// find level-order traversal
 	vector<int> order;
@@ -189,11 +199,11 @@ void Tree::compute_coms() {
 		cells[c] = cell;
 	}
 
-	cout << "Tree::compute_coms exited......" << endl;
+	printf("Tree::compute_coms exited......\n");
 }
 
-void Tree::compute_forces() {
-	cout << "Tree::compute_forces called......" << endl;
+void Tree::compute_forces_seq() {
+	printf("Tree::compute_forces called......\n");
 
 	queue<int> q; // queue of cell ids
 	for(int p = 0; p < particles.size(); p++) {
@@ -217,8 +227,7 @@ void Tree::compute_forces() {
 			}
 			// Split
 			if(mac(particle, cell)) {
-				cout << "mac satisfied for particle " << p << " cell " << c
-				     << endl;
+				printf("mac satisfied for particle %d cell %d\n", p, c);
 				force.add(particle.pm.force(cell.com));
 				continue;
 			}
@@ -231,11 +240,11 @@ void Tree::compute_forces() {
 		particles[p] = particle;
 	}
 
-	cout << "Tree::compute_forces exited......" << endl;
+	printf("Tree::compute_forces exited......\n");
 }
 
-void Tree::update() {
-	cout << "Tree::update called......" << endl;
+void Tree::update_seq() {
+	printf("Tree::update called......\n");
 
 	for(int p = 0; p < n_particles; p++) {
 		auto particle = particles[p];
@@ -252,14 +261,14 @@ void Tree::update() {
 		// handle lost particles
 		if(loc_new.x < 0 || loc_new.x > MAX_DIM || loc_new.y < 0 ||
 		   loc_new.y > MAX_DIM) {
-			cout << "particle " << p << " was lost" << endl;
+			printf("particle %d was lost\n", p);
 			particle.pm.m = -1;
 		}
 
 		particles[p] = particle;
 	}
 
-	cout << "Tree::update exited......" << endl;
+	printf("Tree::update exited......\n");
 }
 
 ///////////////
