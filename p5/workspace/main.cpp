@@ -7,6 +7,7 @@
 #include <unordered_set>
 
 #include "argparse.h"
+#include "datatypes.h"
 #include "tree.h"
 
 using namespace std;
@@ -14,18 +15,13 @@ using namespace std;
 unordered_set<string> FLAGS{};
 unordered_set<string> OPTS{"-i", "-o", "-s", "-t", "-d"};
 
-int M;
-int R;
-float theta;
-float dt;
-int n_particles;
-
 float random(float m) { return (float)rand() / (float)RAND_MAX * m; }
 
 int main(int argc, char **argv) {
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &M);
 	MPI_Comm_rank(MPI_COMM_WORLD, &R);
+    init_structsMPI();
 
 	auto args = parse_args(argc, argv, FLAGS, OPTS);
 	theta = stof(args["-t"]);

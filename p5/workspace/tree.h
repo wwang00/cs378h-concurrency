@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 
+#include "datatypes.h"
 #include "globals.h"
 
 struct Point {
@@ -15,7 +16,7 @@ struct Point {
 	Point diff(Point p);
 
 	std::string to_string();
-};
+} __attribute__((packed));
 
 struct PointMass {
 	Point p;
@@ -26,30 +27,30 @@ struct PointMass {
 	Point force(PointMass pm);
 
 	std::string to_string();
-};
+} __attribute__((packed));
 
 struct Particle {
 	PointMass pm;
 	Point vel, force;
 
 	std::string to_string();
-};
+} __attribute__((packed));
 
 enum CellState { Empty, Full, Split };
 
 struct Cell {
 	CellState state;
-	Point loc;
-	float dim;
 	int parent;
 	int child_base; // Split
-	PointMass com;
 	int pid; // Full
+	float dim;
+	Point loc;
+	PointMass com;
 
 	Cell(Point loc, float dim, int parent);
 
 	std::string to_string();
-};
+} __attribute__((packed));
 
 class Tree {
 	std::vector<Cell> cells;

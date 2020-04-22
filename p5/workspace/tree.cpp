@@ -59,19 +59,14 @@ Point PointMass::force(PointMass pm) {
 }
 
 Cell::Cell(Point loc, float dim, int parent)
-    : state(CellState::Empty), loc(loc), dim(dim), parent(parent),
-      child_base(-1), com(PointMass()), pid(-1) {}
+    : state(CellState::Empty), parent(parent), child_base(-1), pid(-1),
+      dim(dim), loc(loc), com(PointMass()) {}
 
 Tree::Tree() { particles.resize(n_particles); }
 
 void Tree::build() {
 	printf("Tree::build called......\n");
 
-	if(R > 0) {
-		// recv cells
-		return;
-	}
-	// build cells and send
 
 	printf("Tree::build exited......\n");
 }

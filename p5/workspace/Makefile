@@ -2,7 +2,7 @@ PROG = nbody
 CC = mpicxx
 CPPFLAGS = -std=c++11 -Wall -O3
 LDFLAGS = -std=c++11
-OBJS = main.o argparse.o tree.o
+OBJS = main.o argparse.o datatypes.o globals.o tree.o
 
 all : $(PROG)
 
