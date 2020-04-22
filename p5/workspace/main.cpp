@@ -21,7 +21,8 @@ int main(int argc, char **argv) {
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &M);
 	MPI_Comm_rank(MPI_COMM_WORLD, &R);
-    init_structsMPI();
+
+    init_MPI_structs();
 
 	auto args = parse_args(argc, argv, FLAGS, OPTS);
 	theta = stof(args["-t"]);
@@ -44,8 +45,7 @@ int main(int argc, char **argv) {
 		}
 	}
 
-	// sequential
-	if(M == 1) {
+	if(M == 1) { // sequential
 		// do work
 		auto t0 = MPI_Wtime();
 		for(int s = 0; s < stoi(args["-s"]); s++) {
@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
 		}
 		auto t1 = MPI_Wtime();
 		cout << (t1 - t0) << endl;
-	} else {
+	} else { // parallel
 		if(R == 0) {
 			// do work
 			auto t0 = MPI_Wtime();

@@ -67,17 +67,58 @@ Tree::Tree() { particles.resize(n_particles); }
 void Tree::build() {
 	printf("Tree::build called......\n");
 
+	MPI_Status status;
+	MPI_Probe(0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+	int n_cells;
+	MPI_Get_count(&status, CellMPI, &n_cells);
+	cells.reserve(n_cells);
+	// FIXME recv from bcast
+	MPI_Recv(&cells[0], n_cells, CellMPI, 0, MPI_ANY_TAG, MPI_COMM_WORLD,
+	         MPI_STATUS_IGNORE);
+	MPI_Recv(&particles[0], n_particles, ParticleMPI, 0, MPI_ANY_TAG,
+	         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
 	printf("Tree::build exited......\n");
 }
 
 void Tree::compute_coms() {
 	printf("Tree::compute_coms called......\n");
-
-	for(int c = R; c < cells.size(); c += M) {
-		// if cell is Full, send com
-		continue;
-		// recv cell child coms
+	// TODO go in reverse order
+	for(int c = R - 1; c < cells.size(); c += M - 1) {
+		auto cell = cells[c];
+		if(cell.state == CellState::Empty)
+			continue;
+		if(cell.state == CellState::Full) {
+			cell.com = particles[cell.pid].pm;
+			cells[c] = cell;
+			continue;
+		}
+		// FIXME what if i am responsible for child
+		// actually this is ok cause i would have processed it already
+		// Split: must send upstream
+		auto com = PointMass();
+		auto base = cell.child_base;
+		for(int ch = base; ch < base + 4; ch++) {
+			auto child = cells[ch];
+			if(child.state == CellState::Empty)
+				continue;
+			if(child.state == CellState::Full) {
+				com.add(particles[child.pid].pm);
+				continue;
+			}
+			PointMass child_com;
+			auto source = ch % (M - 1) + 1;
+			MPI_Recv(&child_com, 1, PointMassMPI, source, ch, MPI_COMM_WORLD,
+			         MPI_STATUS_IGNORE);
+			com.add(child_com);
+		}
+		com.normalize();
+		if(c > 0) {
+			auto dest = cell.parent % (M - 1) + 1;
+			MPI_Send(&com, 1, PointMassMPI, dest, c, MPI_COMM_WORLD);
+		}
+		cell.com = com;
+		cells[c] = cell;
 	}
 
 	printf("Tree::compute_coms exited......\n");
@@ -92,44 +133,45 @@ void Tree::compute_forces() {
 void Tree::update() {}
 
 void Tree::build_master() {
-	printf("Tree::build called......\n");
+	printf("Tree::build_master called......\n");
 
-	if(R > 0) {
-		// recv cells
-		return;
-	}
-	// build cells and send
+	build_seq();
+	MPI_Bcast(&cells[0], cells.size(), CellMPI, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&particles[0], n_particles, ParticleMPI, 0, MPI_COMM_WORLD);
 
-	printf("Tree::build exited......\n");
+	printf("Tree::build_master exited......\n");
 }
 
 void Tree::compute_coms_master() {
-	printf("Tree::compute_coms called......\n");
+	printf("Tree::compute_coms_master called......\n");
 
-	for(int c = R; c < cells.size(); c += M) {
-		// if cell is Full, send com
-		continue;
-		// recv cell child coms
+	MPI_Status status;
+	for(int i = 0; i < cells.size(); i++) {
+		PointMass com;
+		MPI_Recv(&com, 1, PointMassMPI, MPI_ANY_SOURCE, MPI_ANY_TAG,
+		         MPI_COMM_WORLD, &status);
+		auto c = status.MPI_TAG;
+		cells[c].com = com;
 	}
 
-	printf("Tree::compute_coms exited......\n");
+	printf("Tree::compute_coms_master exited......\n");
 }
 
 void Tree::compute_forces_master() {
-	printf("Tree::compute_forces called......\n");
+	printf("Tree::compute_forces_master called......\n");
 
-	printf("Tree::compute_forces exited......\n");
+	printf("Tree::compute_forces_master exited......\n");
 }
 
 void Tree::update_master() {}
 
 void Tree::build_seq() {
-	printf("Tree::build called......\n");
+	printf("Tree::build_seq called......\n");
 
 	cells.clear();
 	cells.push_back(Cell(Point(), MAX_DIM, -1));
 	for(int p = 0; p < n_particles; p++) {
-		printf("particle %d\n", p);
+		// printf("particle %d\n", p);
 		auto particle = particles[p];
 		if(particle.pm.m < 0)
 			continue;
@@ -138,7 +180,7 @@ void Tree::build_seq() {
 		int cid = 0;
 		bool working = true;
 		while(working) {
-			printf("\tat cid %d\n", cid);
+			// printf("\tat cid %d\n", cid);
 			auto curr = cells[cid];
 			auto dim_half = curr.dim / 2;
 			auto xc = curr.loc.x;
@@ -149,7 +191,7 @@ void Tree::build_seq() {
 
 			switch(curr.state) {
 			case CellState::Empty: {
-				printf("\tswitch state Empty\n");
+				// printf("\tswitch state Empty\n");
 
 				// found a place to insert
 				curr.state = CellState::Full;
@@ -159,7 +201,7 @@ void Tree::build_seq() {
 				break;
 			}
 			case CellState::Full: {
-				printf("\tswitch state Full\n");
+				// printf("\tswitch state Full\n");
 
 				// split and make empty subcells
 				curr.child_base = cells.size();
@@ -182,7 +224,7 @@ void Tree::build_seq() {
 				cells[cid] = curr;
 			}
 			case CellState::Split: {
-				printf("\tswitch state Split\n");
+				// printf("\tswitch state Split\n");
 
 				// recurse into the right quadrant
 				auto qp = quadrant(particle.pm.p, mid);
@@ -190,45 +232,23 @@ void Tree::build_seq() {
 				break;
 			}
 			default:
-				printf("Tree::build BAD STATE\n");
+				printf("Tree::build_seq BAD STATE\n");
 				return;
 			}
 		}
 	}
 
-	printf("Tree::build exited......\n");
+	printf("Tree::build_seq exited......\n");
 }
 
 void Tree::compute_coms_seq() {
-	printf("Tree::compute_coms called......\n");
+	printf("Tree::compute_coms_seq called......\n");
 
-	// find level-order traversal
-	vector<int> order;
-	queue<int> q;
-	q.push(0);
-	while(!q.empty()) {
-		auto c = q.front();
-		q.pop();
+	// calculate coms in reverse order
+	for(int c = cells.size() - 1; c >= 0; c--) {
 		auto cell = cells[c];
 		if(cell.state == CellState::Empty)
 			continue;
-
-		// add Full or Split cell to level order
-		order.push_back(c);
-		if(cell.state == CellState::Full)
-			continue;
-
-		// add Split children to queue
-		auto base = cell.child_base;
-		for(int ch = base; ch < base + 4; ch++) {
-			q.push(ch);
-		}
-	}
-
-	// calculate coms in reverse level-order
-	for(auto cit = order.rbegin(); cit != order.rend(); cit++) {
-		auto c = *cit;
-		auto cell = cells[c];
 		PointMass com;
 		if(cell.state == CellState::Full) {
 			com = particles[cell.pid].pm;
@@ -245,11 +265,11 @@ void Tree::compute_coms_seq() {
 		cells[c] = cell;
 	}
 
-	printf("Tree::compute_coms exited......\n");
+	printf("Tree::compute_coms_seq exited......\n");
 }
 
 void Tree::compute_forces_seq() {
-	printf("Tree::compute_forces called......\n");
+	printf("Tree::compute_forces_seq called......\n");
 
 	queue<int> q; // queue of cell ids
 	for(int p = 0; p < particles.size(); p++) {
@@ -286,11 +306,11 @@ void Tree::compute_forces_seq() {
 		particles[p] = particle;
 	}
 
-	printf("Tree::compute_forces exited......\n");
+	printf("Tree::compute_forces_seq exited......\n");
 }
 
 void Tree::update_seq() {
-	printf("Tree::update called......\n");
+	printf("Tree::update_seq called......\n");
 
 	for(int p = 0; p < n_particles; p++) {
 		auto particle = particles[p];
@@ -314,7 +334,7 @@ void Tree::update_seq() {
 		particles[p] = particle;
 	}
 
-	printf("Tree::update exited......\n");
+	printf("Tree::update_seq exited......\n");
 }
 
 ///////////////

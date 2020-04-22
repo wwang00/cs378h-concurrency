@@ -5,10 +5,10 @@
 
 extern MPI_Datatype PointMPI;
 extern MPI_Datatype PointMassMPI;
-extern MPI_Datatype ParticleMPI, ParticleVectorMPI;
-extern MPI_Datatype CellMPI, CellVectorMPI;
+extern MPI_Datatype ParticleMPI;
+extern MPI_Datatype CellMPI;
 
-void init_structsMPI();
+void init_MPI_structs();
 
 void init_PointMPI();
 void init_PointMassMPI();
