@@ -34,9 +34,6 @@ struct Particle {
 	PointMass pm;
 	Point vel, force;
 
-	Particle(PointMass pm);
-	Particle(PointMass pm, Point vel, Point force);
-
 	std::string to_string();
 };
 
@@ -59,18 +56,20 @@ struct Cell {
 class Tree {
 	const float theta;
 	const float dt;
+	const int n_particles;
+
+	std::vector<Cell> cells;
+
+	bool mac(Particle p, Cell c);
 
 public:
-	std::vector<Cell> cells;
 	std::vector<Particle> particles;
 
-	Tree(float theta, float dt);
+	Tree(float theta, float dt, int n_particles);
 
-	void insert(Particle particle);
+	void build();
 	void compute_coms();
 	void compute_forces();
-	bool mac(Particle p, Cell c);
-	void reset();
 
 	std::string to_string();
 };

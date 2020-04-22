@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <fstream>
 #include <iostream>
 #include <mpi.h>
 #include <stdio.h>
@@ -7,8 +8,6 @@
 
 #include "argparse.h"
 #include "tree.h"
-
-#define N 8
 
 using namespace std;
 
@@ -32,39 +31,37 @@ int main(int argc, char **argv) {
 	// Print off a hello world message
 	printf("ENTER processor %d out of %d processors\n", R, M);
 
-	Tree tree(stof(args["-t"]), stof(args["-d"]));
-	vector<Particle> particles;
-	PointMass com{};
-	for(int i = 0; i < N; i++) {
-		PointMass pm{Point{random(4), random(4)}, random(10) + 10};
-		Particle particle = Particle{pm, Point(), Point()};
-		particles.push_back(particle);
-		com.p.x += pm.p.x * pm.m;
-		com.p.y += pm.p.y * pm.m;
-		com.m += pm.m;
-		tree.insert(particle);
+	ifstream ifile(args["-i"]);
+
+	// init tree
+	int n_particles;
+	ifile >> n_particles;
+    cout << "n_particles " << n_particles << endl;
+	Tree tree(stof(args["-t"]), stof(args["-d"]), n_particles);
+
+	// read particle start configurations
+	for(int p = 0; p < n_particles; p++) {
+		Particle particle;
+		int id;
+		ifile >> id >> particle.pm.p.x >> particle.pm.p.y >> particle.pm.m >>
+		    particle.vel.x >> particle.vel.y;
+		particle.force = Point();
+        printf("inserting particle %s\n", particle.to_string().c_str());
+		tree.particles[p] = particle;
 	}
-	com.p.x /= com.m;
-	com.p.y /= com.m;
 
-	tree.compute_coms();
-	tree.compute_forces();
-
-	cout << "particles: {";
-	for(int p = 0; p < N; p++) {
-		printf("\n%d\t%s", p, particles[p].to_string().c_str());
+	for(int s = 0; s < stoi(args["-s"]); s++) {
+        printf("begin iteration %d......\n", s);
+		tree.build();
+		tree.compute_coms();
+		tree.compute_forces();
 	}
-	cout << "\n}" << endl;
 
-	cout << "tree after" << endl << tree.to_string() << endl;
-
-	cout << "true com " << com.to_string() << endl;
-
-	std::copy(tree.particles.begin(), tree.particles.end(), particles.begin());
+    cout << tree.to_string() << endl;
 
 	cout << "particles after: {";
-	for(int p = 0; p < N; p++) {
-		printf("\n%d\t%s", p, particles[p].to_string().c_str());
+	for(int p = 0; p < n_particles; p++) {
+		printf("\n%d\t%s", p, tree.particles[p].to_string().c_str());
 	}
 	cout << "\n}" << endl;
 

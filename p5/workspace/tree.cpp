@@ -58,90 +58,89 @@ Point PointMass::force(PointMass pm) {
 	return Point{c * dp.x, c * dp.y};
 }
 
-Particle::Particle(PointMass pm, Point vel, Point force)
-    : pm(pm), vel(vel), force(force) {}
-
 Cell::Cell(Point loc, float dim, int parent)
     : state(CellState::Empty), loc(loc), dim(dim), parent(parent),
       child_base(-1), com(PointMass()), pid(-1) {}
 
-Tree::Tree(float theta, float dt) : theta(theta), dt(dt) {
-	cells.push_back(Cell(Point(), MAX_DIM, -1));
+Tree::Tree(float theta, float dt, int n_particles)
+    : theta(theta), dt(dt), n_particles(n_particles) {
+	particles.resize(n_particles);
 }
 
-void Tree::insert(Particle particle) {
-	cout << "Tree::insert called......" << endl;
-	cout << "particle " << particle.to_string() << endl;
+void Tree::build() {
+	cout << "Tree::build called......" << endl;
 
-	auto pp = particle.pm.p;
+	cells.clear();
+	cells.push_back(Cell(Point(), MAX_DIM, -1));
+	for(int p = 0; p < n_particles; p++) {
+		cout << "particle " << p << endl;
+		auto particle = particles[p];
+		if(particle.pm.m < 0)
+			continue;
 
-	// insert particle into particles
-	if(pp.x < 0 || pp.x > MAX_DIM || pp.y < 0 || pp.y > MAX_DIM)
-		return;
-	int pid = particles.size();
-	particles.push_back(particle);
+		// update cells
+		int cid = 0;
+		bool working = true;
+		while(working) {
+			cout << "\tat cid " << cid << endl;
+			auto curr = cells[cid];
+			auto dim_half = curr.dim / 2;
+			auto xc = curr.loc.x;
+			auto yc = curr.loc.y;
+			auto xm = xc + dim_half;
+			auto ym = yc + dim_half;
+			Point mid{xm, ym};
 
-	// update cells
-	int cid = 0;
+			switch(curr.state) {
+			case CellState::Empty: {
+				cout << "\tswitch state Empty" << endl;
 
-	while(true) {
-		cout << "Tree::insert cid " << cid << endl;
-		auto curr = cells[cid];
-		auto dim_half = curr.dim / 2;
-		auto xc = curr.loc.x;
-		auto yc = curr.loc.y;
-		auto xm = xc + dim_half;
-		auto ym = yc + dim_half;
-		Point mid{xm, ym};
+				// found a place to insert
+				curr.state = CellState::Full;
+				curr.pid = p;
+				cells[cid] = curr;
+				working = false;
+				break;
+			}
+			case CellState::Full: {
+				cout << "\tswitch state Full" << endl;
 
-		switch(curr.state) {
-		case CellState::Empty: {
-			cout << "Tree::insert switch state Empty" << endl;
+				// split and make empty subcells
+				curr.child_base = cells.size();
+				cells.push_back(Cell(Point{xc, yc}, dim_half, cid));
+				cells.push_back(Cell(Point{xc, ym}, dim_half, cid));
+				cells.push_back(Cell(Point{xm, yc}, dim_half, cid));
+				cells.push_back(Cell(Point{xm, ym}, dim_half, cid));
 
-			// found a place to insert
-			curr.state = CellState::Full;
-			curr.pid = pid;
-			cells[cid] = curr;
+				// move current cell's particle into its subcell
+				auto qc = quadrant(particles[curr.pid].pm.p, mid);
+				auto moved_idx = curr.child_base + qc;
+				auto curr_moved = cells[moved_idx];
+				curr_moved.state = CellState::Full;
+				curr_moved.pid = curr.pid;
+				cells[moved_idx] = curr_moved;
+				curr.pid = -1;
 
-			cout << "Tree::insert exited......" << endl;
-			return;
-		}
-		case CellState::Full: {
-			cout << "Tree::insert switch state Full" << endl;
+				// go straight to case Split
+				curr.state = CellState::Split;
+				cells[cid] = curr;
+			}
+			case CellState::Split: {
+				cout << "\tswitch state Split" << endl;
 
-			// split and make empty subcells
-			curr.child_base = cells.size();
-			cells.push_back(Cell(Point{xc, yc}, dim_half, cid));
-			cells.push_back(Cell(Point{xc, ym}, dim_half, cid));
-			cells.push_back(Cell(Point{xm, yc}, dim_half, cid));
-			cells.push_back(Cell(Point{xm, ym}, dim_half, cid));
-
-			// move current cell's particle into its subcell
-			auto qc = quadrant(particles[curr.pid].pm.p, mid);
-			auto moved_idx = curr.child_base + qc;
-			auto curr_moved = cells[moved_idx];
-			curr_moved.state = CellState::Full;
-			curr_moved.pid = curr.pid;
-			cells[moved_idx] = curr_moved;
-			curr.pid = -1;
-
-			// go straight to case Split
-			curr.state = CellState::Split;
-			cells[cid] = curr;
-		}
-		case CellState::Split: {
-			cout << "Tree::insert switch state Split" << endl;
-
-			// recurse into the right quadrant
-			auto qp = quadrant(pp, mid);
-			cid = curr.child_base + qp;
-			break;
-		}
-		default:
-			cout << "Tree::insert BAD STATE" << endl;
-			return;
+				// recurse into the right quadrant
+				auto qp = quadrant(particle.pm.p, mid);
+				cid = curr.child_base + qp;
+				break;
+			}
+			default:
+				cout << "Tree::build BAD STATE" << endl;
+				return;
+			}
 		}
 	}
+
+	cout << "Tree::build exited......" << endl;
 }
 
 void Tree::compute_coms() {
@@ -214,7 +213,7 @@ void Tree::compute_forces() {
 			}
 			// Split
 			if(mac(particle, cell)) {
-                cout << "mac satisfied particle " << p << " cell " << c << endl;
+				cout << "mac satisfied for particle " << p << " cell " << c << endl;
 				force.add(particle.pm.force(cell.com));
 				continue;
 			}
@@ -228,11 +227,6 @@ void Tree::compute_forces() {
 	}
 
 	cout << "Tree::compute_forces exited......" << endl;
-}
-
-void Tree::reset() {
-	cells.clear();
-	particles.clear();
 }
 
 ///////////////
