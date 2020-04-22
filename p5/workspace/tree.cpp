@@ -1,6 +1,7 @@
 #include "tree.h"
 
 #include <iostream>
+#include <math.h>
 #include <queue>
 #include <sstream>
 #include <stdio.h>
@@ -26,12 +27,35 @@ int quadrant(Point p, Point m) {
 	return 3;
 }
 
-void PointMass::join(const PointMass &pm) {
-	auto mj = m + pm.m;
-	auto xj = (p.x * m + pm.p.x * pm.m) / mj;
-	auto yj = (p.y * m + pm.p.y * pm.m) / mj;
-	p = Point{xj, yj};
-	m = mj;
+bool Tree::mac(Particle p, Cell c) {
+	return c.dim / p.pm.p.diff(c.com.p).mag() < theta;
+}
+
+inline Point Point::diff(Point p) { return Point{p.x - x, p.y - y}; }
+
+inline float Point::mag() { return sqrtf(x * x + y * y); }
+
+inline void Point::add(Point p) {
+	x += p.x;
+	y += p.y;
+}
+
+inline void PointMass::add(PointMass pm) {
+	p.x += pm.p.x * pm.m;
+	p.y += pm.p.y * pm.m;
+	m += pm.m;
+}
+
+inline void PointMass::normalize() {
+	p.x /= m;
+	p.y /= m;
+}
+
+Point PointMass::force(PointMass pm) {
+	auto dp = p.diff(pm.p);
+	auto d = fmax(dp.mag(), MIN_R);
+	auto c = G * m * pm.m / (d * d * d);
+	return Point{c * dp.x, c * dp.y};
 }
 
 Particle::Particle(PointMass pm, Point vel, Point force)
@@ -121,6 +145,8 @@ void Tree::insert(Particle particle) {
 }
 
 void Tree::compute_coms() {
+	cout << "Tree::compute_coms called......" << endl;
+
 	// find level-order traversal
 	vector<int> order;
 	queue<int> q;
@@ -134,9 +160,11 @@ void Tree::compute_coms() {
 
 		// add Full or Split cell to level order
 		order.push_back(c);
-		auto base = cell.child_base;
-		if(base < 0)
+		if(cell.state == CellState::Full)
 			continue;
+
+		// add Split children to queue
+		auto base = cell.child_base;
 		for(int ch = base; ch < base + 4; ch++) {
 			q.push(ch);
 		}
@@ -146,24 +174,65 @@ void Tree::compute_coms() {
 	for(auto cit = order.rbegin(); cit != order.rend(); cit++) {
 		auto c = *cit;
 		auto cell = cells[c];
-		auto com = PointMass();
+		PointMass com;
 		if(cell.state == CellState::Full) {
 			com = particles[cell.pid].pm;
 		} else { // Split
+			com = PointMass();
 			auto base = cell.child_base;
 			for(int ch = base; ch < base + 4; ch++) {
 				auto child = cells[ch];
-				auto comc = child.com;
-				com.p.x += comc.p.x * comc.m;
-				com.p.y += comc.p.y * comc.m;
-				com.m += comc.m;
+				com.add(child.com);
 			}
-			com.p.x /= com.m;
-			com.p.y /= com.m;
+			com.normalize();
 		}
 		cell.com = com;
 		cells[c] = cell;
 	}
+
+	cout << "Tree::compute_coms exited......" << endl;
+}
+
+void Tree::compute_forces() {
+	cout << "Tree::compute_forces called......" << endl;
+
+	queue<int> q; // queue of cell ids
+	for(int p = 0; p < particles.size(); p++) {
+		auto particle = particles[p];
+		auto force = Point();
+		q.push(0);
+		while(!q.empty()) {
+			auto c = q.front();
+			q.pop();
+			auto cell = cells[c];
+			if(cell.state == CellState::Empty)
+				continue;
+			if(cell.state == CellState::Full) {
+				if(cell.pid != p)
+					force.add(particle.pm.force(particles[cell.pid].pm));
+				continue;
+			}
+			// Split
+			if(mac(particle, cell)) {
+                cout << "mac satisfied particle " << p << " cell " << c << endl;
+				force.add(particle.pm.force(cell.com));
+				continue;
+			}
+			auto base = cell.child_base;
+			for(int ch = base; ch < base + 4; ch++) {
+				q.push(ch);
+			}
+		}
+		particle.force = force;
+		particles[p] = particle;
+	}
+
+	cout << "Tree::compute_forces exited......" << endl;
+}
+
+void Tree::reset() {
+	cells.clear();
+	particles.clear();
 }
 
 ///////////////
@@ -172,7 +241,7 @@ void Tree::compute_coms() {
 
 string Point::to_string() {
 	char buf[1024];
-	sprintf(buf, "(%.3f, %.3f)", x, y);
+	sprintf(buf, "(%.6f, %.6f)", x, y);
 	return string(buf);
 }
 
@@ -205,8 +274,8 @@ string Cell::to_string() {
 	auto com_c = com.to_string().c_str();
 	sprintf(buf,
 	        "{ state: %s,\tloc: %s,\tdim: %.3f,\tparent: %d,\tchild_base: "
-	        "%d,\tcom: %s }",
-	        state_c, loc_c, dim, parent, child_base, com_c);
+	        "%d,  \tpid: %d, \tcom: %s }",
+	        state_c, loc_c, dim, parent, child_base, pid, com_c);
 	return string(buf);
 }
 

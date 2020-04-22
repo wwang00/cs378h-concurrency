@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <iostream>
 #include <mpi.h>
 #include <stdio.h>
@@ -35,7 +36,7 @@ int main(int argc, char **argv) {
 	vector<Particle> particles;
 	PointMass com{};
 	for(int i = 0; i < N; i++) {
-		PointMass pm{Point{random(4), random(4)}, random(10)};
+		PointMass pm{Point{random(4), random(4)}, random(10) + 10};
 		Particle particle = Particle{pm, Point(), Point()};
 		particles.push_back(particle);
 		com.p.x += pm.p.x * pm.m;
@@ -46,9 +47,8 @@ int main(int argc, char **argv) {
 	com.p.x /= com.m;
 	com.p.y /= com.m;
 
-	cout << "tree" << endl << tree.to_string() << endl;
-
 	tree.compute_coms();
+	tree.compute_forces();
 
 	cout << "particles: {";
 	for(int p = 0; p < N; p++) {
@@ -56,9 +56,17 @@ int main(int argc, char **argv) {
 	}
 	cout << "\n}" << endl;
 
-	cout << "tree" << endl << tree.to_string() << endl;
+	cout << "tree after" << endl << tree.to_string() << endl;
 
 	cout << "true com " << com.to_string() << endl;
+
+	std::copy(tree.particles.begin(), tree.particles.end(), particles.begin());
+
+	cout << "particles after: {";
+	for(int p = 0; p < N; p++) {
+		printf("\n%d\t%s", p, particles[p].to_string().c_str());
+	}
+	cout << "\n}" << endl;
 
 	printf("EXIT processor %d out of %d processors\n", R, M);
 
