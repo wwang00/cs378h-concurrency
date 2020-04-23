@@ -15,7 +15,7 @@ using namespace std;
 unordered_set<string> FLAGS{};
 unordered_set<string> OPTS{"-i", "-o", "-s", "-t", "-d"};
 
-float random(float m) { return (float)rand() / (float)RAND_MAX * m; }
+double random(double m) { return (double)rand() / (double)RAND_MAX * m; }
 
 int main(int argc, char **argv) {
 	MPI_Init(&argc, &argv);

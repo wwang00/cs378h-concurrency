@@ -33,7 +33,7 @@ bool Tree::mac(Particle p, Cell c) {
 
 Point Point::diff(Point p) { return Point{p.x - x, p.y - y}; }
 
-float Point::mag() { return sqrtf(x * x + y * y); }
+double Point::mag() { return sqrt(x * x + y * y); }
 
 inline void Point::add(Point p) {
 	x += p.x;
@@ -58,7 +58,7 @@ Point PointMass::force(PointMass pm) {
 	return Point{c * dp.x, c * dp.y};
 }
 
-Cell::Cell(Point loc, float dim, int parent)
+Cell::Cell(Point loc, double dim, int parent)
     : state(CellState::Empty), parent(parent), child_base(-1), pid(-1),
       dim(dim), loc(loc), com(PointMass()) {}
 
@@ -316,8 +316,8 @@ void Tree::update_seq() {
 		auto particle = particles[p];
 		if(particle.pm.m < 0)
 			continue;
-		auto ax_dt_2 = 0.5f * (particle.force.x / particle.pm.m) * dt;
-		auto ay_dt_2 = 0.5f * (particle.force.y / particle.pm.m) * dt;
+		auto ax_dt_2 = 0.5 * (particle.force.x / particle.pm.m) * dt;
+		auto ay_dt_2 = 0.5 * (particle.force.y / particle.pm.m) * dt;
 		Point loc_new{particle.pm.p.x + (particle.vel.x + ax_dt_2) * dt,
 		              particle.pm.p.y + (particle.vel.y + ay_dt_2) * dt};
 		Point vel_new{particle.vel.x + ax_dt_2, particle.vel.y + ay_dt_2};

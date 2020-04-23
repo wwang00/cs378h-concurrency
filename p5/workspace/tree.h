@@ -8,11 +8,11 @@
 #include "globals.h"
 
 struct Point {
-	float x;
-	float y;
+	double x;
+	double y;
 
 	void add(Point p);
-	float mag();
+	double mag();
 	Point diff(Point p);
 
 	std::string to_string();
@@ -20,7 +20,7 @@ struct Point {
 
 struct PointMass {
 	Point p;
-	float m;
+	double m;
 
 	void add(PointMass pm);
 	void normalize();
@@ -43,11 +43,11 @@ struct Cell {
 	int parent;
 	int child_base; // Split
 	int pid; // Full
-	float dim;
+	double dim;
 	Point loc;
 	PointMass com;
 
-	Cell(Point loc, float dim, int parent);
+	Cell(Point loc, double dim, int parent);
 
 	std::string to_string();
 } __attribute__((packed));

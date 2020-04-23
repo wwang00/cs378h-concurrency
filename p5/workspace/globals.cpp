@@ -2,6 +2,6 @@
 
 int M;
 int R;
-float theta;
-float dt;
+double theta;
+double dt;
 int n_particles;
