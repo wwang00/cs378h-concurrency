@@ -47,6 +47,7 @@ struct Cell {
 	Point loc;
 	PointMass com;
 
+    Cell();
 	Cell(Point loc, double dim, int parent);
 
 	std::string to_string();

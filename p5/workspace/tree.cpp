@@ -58,6 +58,8 @@ Point PointMass::force(PointMass pm) {
 	return Point{c * dp.x, c * dp.y};
 }
 
+Cell::Cell() {}
+
 Cell::Cell(Point loc, double dim, int parent)
     : state(CellState::Empty), parent(parent), child_base(-1), pid(-1),
       dim(dim), loc(loc), com(PointMass()) {}
@@ -65,69 +67,87 @@ Cell::Cell(Point loc, double dim, int parent)
 Tree::Tree() { particles.resize(n_particles); }
 
 void Tree::build() {
-	printf("Tree::build called......\n");
+	printf("[%d] Tree::build called......\n", R);
 
-	MPI_Status status;
-	MPI_Probe(0, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 	int n_cells;
-	MPI_Get_count(&status, CellMPI, &n_cells);
-	cells.reserve(n_cells);
-	// FIXME recv from bcast
-	MPI_Recv(&cells[0], n_cells, CellMPI, 0, MPI_ANY_TAG, MPI_COMM_WORLD,
-	         MPI_STATUS_IGNORE);
-	MPI_Recv(&particles[0], n_particles, ParticleMPI, 0, MPI_ANY_TAG,
-	         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+	MPI_Bcast(&n_cells, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	cells.resize(n_cells);
+	MPI_Bcast(&cells[0], cells.size(), CellMPI, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&particles[0], n_particles, ParticleMPI, 0, MPI_COMM_WORLD);
 
-	printf("Tree::build exited......\n");
+	printf("[%d] Tree::build exited......\n", R);
 }
 
 void Tree::compute_coms() {
-	printf("Tree::compute_coms called......\n");
-	// TODO go in reverse order
-	for(int c = R - 1; c < cells.size(); c += M - 1) {
+	printf("[%d] Tree::compute_coms called......\n", R);
+
+	int start = cells.size() - 1;
+	if(R - 1 > start) {
+		printf("[%d] Tree::compute_coms exited......\n", R);
+		return;
+	}
+	while(start % (M - 1) != R - 1) {
+		start--;
+	}
+	for(int c = start; c >= 0; c -= M - 1) {
+		PointMass com;
 		auto cell = cells[c];
-		if(cell.state == CellState::Empty)
-			continue;
-		if(cell.state == CellState::Full) {
-			cell.com = particles[cell.pid].pm;
-			cells[c] = cell;
-			continue;
-		}
-		// FIXME what if i am responsible for child
-		// actually this is ok cause i would have processed it already
-		// Split: must send upstream
-		auto com = PointMass();
-		auto base = cell.child_base;
-		for(int ch = base; ch < base + 4; ch++) {
-			auto child = cells[ch];
-			if(child.state == CellState::Empty)
-				continue;
-			if(child.state == CellState::Full) {
-				com.add(particles[child.pid].pm);
-				continue;
+		switch(cell.state) {
+		case CellState::Empty:
+			com = PointMass();
+			break;
+		case CellState::Full:
+			com = particles[cell.pid].pm;
+			break;
+		case CellState::Split: {
+			com = PointMass();
+			auto base = cell.child_base;
+			for(int ch = base; ch < base + 4; ch++) {
+				auto child = cells[ch];
+				if(child.state == CellState::Empty)
+					continue;
+				if(child.state == CellState::Full) {
+					com.add(particles[child.pid].pm);
+					continue;
+				}
+				// recv from Split child
+				PointMass child_com;
+				auto source = ch % (M - 1) + 1;
+				if(source == R) {
+					child_com = child.com;
+				} else {
+					MPI_Recv(&child_com, 1, PointMassMPI, source, ch,
+					         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+				}
+				com.add(child_com);
 			}
-			PointMass child_com;
-			auto source = ch % (M - 1) + 1;
-			MPI_Recv(&child_com, 1, PointMassMPI, source, ch, MPI_COMM_WORLD,
-			         MPI_STATUS_IGNORE);
-			com.add(child_com);
+			com.normalize();
+			// send to parent
+			if(c > 0) {
+				auto dest = cell.parent % (M - 1) + 1;
+				if(dest != R)
+					MPI_Send(&com, 1, PointMassMPI, dest, c, MPI_COMM_WORLD);
+			}
+			break;
 		}
-		com.normalize();
-		if(c > 0) {
-			auto dest = cell.parent % (M - 1) + 1;
-			MPI_Send(&com, 1, PointMassMPI, dest, c, MPI_COMM_WORLD);
+		default:
+			printf("[%d] Tree::compute_coms BAD STATE %d\n", R, cell.state);
+			break;
 		}
+		// store locally
 		cell.com = com;
 		cells[c] = cell;
+		// send to master
+		MPI_Send(&com, 1, PointMassMPI, 0, c, MPI_COMM_WORLD);
 	}
 
-	printf("Tree::compute_coms exited......\n");
+	printf("[%d] Tree::compute_coms exited......\n", R);
 }
 
 void Tree::compute_forces() {
-	printf("Tree::compute_forces called......\n");
+	printf("[%d] Tree::compute_forces called......\n", R);
 
-	printf("Tree::compute_forces exited......\n");
+	printf("[%d] Tree::compute_forces exited......\n", R);
 }
 
 void Tree::update() {}
@@ -136,6 +156,9 @@ void Tree::build_master() {
 	printf("Tree::build_master called......\n");
 
 	build_seq();
+
+	int n_cells = cells.size();
+	MPI_Bcast(&n_cells, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(&cells[0], cells.size(), CellMPI, 0, MPI_COMM_WORLD);
 	MPI_Bcast(&particles[0], n_particles, ParticleMPI, 0, MPI_COMM_WORLD);
 
