@@ -42,12 +42,12 @@ struct Cell {
 	CellState state;
 	int parent;
 	int child_base; // Split
-	int pid; // Full
+	int pid;        // Full
 	double dim;
 	Point loc;
 	PointMass com;
 
-    Cell();
+	Cell();
 	Cell(Point loc, double dim, int parent);
 
 	std::string to_string();
@@ -57,6 +57,8 @@ class Tree {
 	std::vector<Cell> cells;
 
 	bool mac(Particle p, Cell c);
+	void compute_forces_work(int base, int stride);
+	Particle update_get(int p);
 
 public:
 	std::vector<Particle> particles;

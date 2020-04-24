@@ -21,6 +21,7 @@ int main(int argc, char **argv) {
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &M);
 	MPI_Comm_rank(MPI_COMM_WORLD, &R);
+	printf("enter processor %d of %d\n", R, M);
 
 	init_MPI_structs();
 
@@ -63,8 +64,8 @@ int main(int argc, char **argv) {
 			for(int s = 0; s < stoi(args["-s"]); s++) {
 				tree.build_master();
 				tree.compute_coms_master();
-				// tree.compute_forces_master();
-				// tree.update_master();
+				tree.compute_forces_master();
+				tree.update_master();
 			}
 			auto t1 = MPI_Wtime();
 			cout << (t1 - t0) << endl;
@@ -73,8 +74,8 @@ int main(int argc, char **argv) {
 			for(int s = 0; s < stoi(args["-s"]); s++) {
 				tree.build();
 				tree.compute_coms();
-				// tree.compute_forces();
-				// tree.update();
+				tree.compute_forces();
+				tree.update();
 			}
 		}
 	}

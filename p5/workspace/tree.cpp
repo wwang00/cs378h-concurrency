@@ -147,10 +147,22 @@ void Tree::compute_coms() {
 void Tree::compute_forces() {
 	printf("[%d] Tree::compute_forces called......\n", R);
 
+	MPI_Bcast(&cells[0], cells.size(), CellMPI, 0, MPI_COMM_WORLD);
+	compute_forces_work(R - 1, M - 1);
+
 	printf("[%d] Tree::compute_forces exited......\n", R);
 }
 
-void Tree::update() {}
+void Tree::update() {
+	printf("[%d] Tree::update called......\n", R);
+
+	for(int p = R - 1; p < n_particles; p += M - 1) {
+		auto particle = update_get(p);
+		MPI_Send(&particle, 1, ParticleMPI, 0, p, MPI_COMM_WORLD);
+	}
+
+	printf("[%d] Tree::update exited......\n", R);
+}
 
 void Tree::build_master() {
 	printf("Tree::build_master called......\n");
@@ -183,10 +195,25 @@ void Tree::compute_coms_master() {
 void Tree::compute_forces_master() {
 	printf("Tree::compute_forces_master called......\n");
 
+	MPI_Bcast(&cells[0], cells.size(), CellMPI, 0, MPI_COMM_WORLD);
+
 	printf("Tree::compute_forces_master exited......\n");
 }
 
-void Tree::update_master() {}
+void Tree::update_master() {
+	printf("[%d] Tree::update_master called......\n", R);
+
+	MPI_Status status;
+	for(int i = 0; i < n_particles; i++) {
+		Particle particle;
+		MPI_Recv(&particle, 1, ParticleMPI, MPI_ANY_SOURCE, MPI_ANY_TAG,
+		         MPI_COMM_WORLD, &status);
+		auto p = status.MPI_TAG;
+		particles[p] = particle;
+	}
+
+	printf("[%d] Tree::update_master exited......\n", R);
+}
 
 void Tree::build_seq() {
 	printf("Tree::build_seq called......\n");
@@ -294,8 +321,24 @@ void Tree::compute_coms_seq() {
 void Tree::compute_forces_seq() {
 	printf("Tree::compute_forces_seq called......\n");
 
+	compute_forces_work(0, 1);
+
+	printf("Tree::compute_forces_seq exited......\n");
+}
+
+void Tree::update_seq() {
+	printf("Tree::update_seq called......\n");
+
+	for(int p = 0; p < n_particles; p++) {
+		particles[p] = update_get(p);
+	}
+
+	printf("Tree::update_seq exited......\n");
+}
+
+void Tree::compute_forces_work(int base, int stride) {
 	queue<int> q; // queue of cell ids
-	for(int p = 0; p < particles.size(); p++) {
+	for(int p = base; p < particles.size(); p += stride) {
 		auto particle = particles[p];
 		if(particle.pm.m < 0)
 			continue;
@@ -316,7 +359,6 @@ void Tree::compute_forces_seq() {
 			}
 			// Split
 			if(mac(particle, cell)) {
-				printf("mac satisfied for particle %d cell %d\n", p, c);
 				force.add(particle.pm.force(cell.com));
 				continue;
 			}
@@ -328,36 +370,28 @@ void Tree::compute_forces_seq() {
 		particle.force = force;
 		particles[p] = particle;
 	}
-
-	printf("Tree::compute_forces_seq exited......\n");
 }
 
-void Tree::update_seq() {
-	printf("Tree::update_seq called......\n");
+Particle Tree::update_get(int p) {
+	auto particle = particles[p];
+	if(particle.pm.m < 0)
+		return particle;
+	auto ax_dt_2 = 0.5 * (particle.force.x / particle.pm.m) * dt;
+	auto ay_dt_2 = 0.5 * (particle.force.y / particle.pm.m) * dt;
+	Point loc_new{particle.pm.p.x + (particle.vel.x + ax_dt_2) * dt,
+	              particle.pm.p.y + (particle.vel.y + ay_dt_2) * dt};
+	Point vel_new{particle.vel.x + ax_dt_2, particle.vel.y + ay_dt_2};
+	particle.pm.p = loc_new;
+	particle.vel = vel_new;
 
-	for(int p = 0; p < n_particles; p++) {
-		auto particle = particles[p];
-		if(particle.pm.m < 0)
-			continue;
-		auto ax_dt_2 = 0.5 * (particle.force.x / particle.pm.m) * dt;
-		auto ay_dt_2 = 0.5 * (particle.force.y / particle.pm.m) * dt;
-		Point loc_new{particle.pm.p.x + (particle.vel.x + ax_dt_2) * dt,
-		              particle.pm.p.y + (particle.vel.y + ay_dt_2) * dt};
-		Point vel_new{particle.vel.x + ax_dt_2, particle.vel.y + ay_dt_2};
-		particle.pm.p = loc_new;
-		particle.vel = vel_new;
-
-		// handle lost particles
-		if(loc_new.x < 0 || loc_new.x > MAX_DIM || loc_new.y < 0 ||
-		   loc_new.y > MAX_DIM) {
-			printf("particle %d was lost\n", p);
-			particle.pm.m = -1;
-		}
-
-		particles[p] = particle;
+	// handle lost particles
+	if(loc_new.x < 0 || loc_new.x > MAX_DIM || loc_new.y < 0 ||
+	   loc_new.y > MAX_DIM) {
+		printf("particle %d was lost\n", p);
+		particle.pm.m = -1;
 	}
 
-	printf("Tree::update_seq exited......\n");
+	return particle;
 }
 
 ///////////////
