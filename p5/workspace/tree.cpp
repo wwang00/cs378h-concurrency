@@ -359,6 +359,7 @@ void Tree::compute_forces_work(int base, int stride) {
 			}
 			// Split
 			if(mac(particle, cell)) {
+                printf("mac satisfied particle %d cell %d\n", p, c);
 				force.add(particle.pm.force(cell.com));
 				continue;
 			}
