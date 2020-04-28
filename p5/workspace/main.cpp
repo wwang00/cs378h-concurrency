@@ -26,22 +26,22 @@ int main(int argc, char **argv) {
 	init_MPI_structs();
 
 	auto args = parse_args(argc, argv, FLAGS, OPTS);
-	theta = stof(args["-t"]);
-	dt = stof(args["-d"]);
+	THETA = stof(args["-t"]);
+	DT = stof(args["-d"]);
 
 	ifstream ifile(args["-i"]);
 
 	// init local tree
-	ifile >> n_particles;
+	ifile >> N_PTS;
 	auto tree = Tree();
 
 	if(R == 0) {
 		// read particle start configurations
-		for(int p = 0; p < n_particles; p++) {
+		for(int p = 0; p < N_PTS; p++) {
 			auto particle = Particle();
 			int id;
 			ifile >> id >> particle.pm.p.x >> particle.pm.p.y >>
-			    particle.pm.m >> particle.vel.x >> particle.vel.y;
+			    particle.pm.m >> particle.v.x >> particle.v.y;
 			tree.particles[p] = particle;
 		}
 	}
@@ -51,13 +51,13 @@ int main(int argc, char **argv) {
 		auto t0 = MPI_Wtime();
 		for(int s = 0; s < stoi(args["-s"]); s++) {
 			tree.build_seq();
-            // printf("%s\n", tree.to_string().c_str());
+			// printf("%s\n", tree.to_string().c_str());
 			tree.compute_coms_seq();
-            // printf("%s\n", tree.to_string().c_str());
+			// printf("%s\n", tree.to_string().c_str());
 			tree.compute_forces_seq();
-            // printf("%s\n", tree.to_string().c_str());
+			// printf("%s\n", tree.to_string().c_str());
 			tree.update_seq();
-            // printf("%s\n", tree.to_string().c_str());
+			// printf("%s\n", tree.to_string().c_str());
 		}
 		auto t1 = MPI_Wtime();
 		cout << (t1 - t0) << endl;
@@ -90,13 +90,13 @@ int main(int argc, char **argv) {
 
 		ofstream ofile(args["-o"]);
 		ofile << std::scientific;
-		ofile << n_particles << endl;
+		ofile << N_PTS << endl;
 
-		for(int p = 0; p < n_particles; p++) {
+		for(int p = 0; p < N_PTS; p++) {
 			auto particle = tree.particles[p];
 			ofile << p << "\t" << particle.pm.p.x << "\t" << particle.pm.p.y
-			      << "\t" << particle.pm.m << "\t" << particle.vel.x << "\t"
-			      << particle.vel.y << endl;
+			      << "\t" << particle.pm.m << "\t" << particle.v.x << "\t"
+			      << particle.v.y << endl;
 		}
 
 		ofile.close();

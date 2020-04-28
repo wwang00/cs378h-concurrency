@@ -1,6 +1,6 @@
 from random import uniform
 
-N = 1000
+N = 100
 M = 2
 B = 50
 V = 20

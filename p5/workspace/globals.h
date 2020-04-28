@@ -7,8 +7,8 @@
 
 extern int M;
 extern int R;
-extern double theta;
-extern double dt;
-extern int n_particles;
+extern double THETA;
+extern double DT;
+extern int N_PTS;
 
 #endif

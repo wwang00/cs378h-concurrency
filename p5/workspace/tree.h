@@ -12,7 +12,7 @@ struct Point {
 	double y;
 
 	void add(Point p);
-	double mag();
+	double norm();
 	Point diff(Point p);
 
 	std::string to_string();
@@ -31,7 +31,7 @@ struct PointMass {
 
 struct Particle {
 	PointMass pm;
-	Point vel, force;
+	Point v, f;
 
 	std::string to_string();
 } __attribute__((packed));
@@ -56,7 +56,6 @@ struct Cell {
 class Tree {
 	std::vector<Cell> cells;
 
-	bool mac(Particle p, Cell c);
 	void compute_forces_work(int base, int stride);
 	Particle update_get(int p);
 

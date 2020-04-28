@@ -27,13 +27,13 @@ int quadrant(Point p, Point m) {
 	return 3;
 }
 
-bool Tree::mac(Particle p, Cell c) {
-	return c.dim / p.pm.p.diff(c.com.p).mag() < theta;
+bool mac(Particle p, Cell c) {
+	return c.dim / p.pm.p.diff(c.com.p).norm() < THETA;
 }
 
 Point Point::diff(Point p) { return Point{p.x - x, p.y - y}; }
 
-double Point::mag() { return sqrt(x * x + y * y); }
+double Point::norm() { return sqrt(x * x + y * y); }
 
 inline void Point::add(Point p) {
 	x += p.x;
@@ -53,7 +53,7 @@ inline void PointMass::normalize() {
 
 Point PointMass::force(PointMass pm) {
 	auto dp = p.diff(pm.p);
-	auto d = dp.mag();
+	auto d = dp.norm();
 	if(d < MIN_R) {
 		printf("rlimit reached\n");
 		d = MIN_R;
@@ -68,7 +68,7 @@ Cell::Cell(Point loc, double dim, int parent)
     : state(Empty), parent(parent), child_base(-1), pid(-1), dim(dim), loc(loc),
       com(PointMass()) {}
 
-Tree::Tree() { particles.resize(n_particles); }
+Tree::Tree() { particles.resize(N_PTS); }
 
 void Tree::build() {
 	printf("[%d] Tree::build called......\n", R);
@@ -77,7 +77,7 @@ void Tree::build() {
 	MPI_Bcast(&n_cells, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	cells.resize(n_cells);
 	MPI_Bcast(&cells[0], cells.size(), CellMPI, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&particles[0], n_particles, ParticleMPI, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&particles[0], N_PTS, ParticleMPI, 0, MPI_COMM_WORLD);
 
 	printf("[%d] Tree::build exited......\n", R);
 }
@@ -160,7 +160,7 @@ void Tree::compute_forces() {
 void Tree::update() {
 	printf("[%d] Tree::update called......\n", R);
 
-	for(int p = R - 1; p < n_particles; p += M - 1) {
+	for(int p = R - 1; p < N_PTS; p += M - 1) {
 		auto particle = update_get(p);
 		MPI_Send(&particle, 1, ParticleMPI, 0, p, MPI_COMM_WORLD);
 	}
@@ -176,7 +176,7 @@ void Tree::build_master() {
 	int n_cells = cells.size();
 	MPI_Bcast(&n_cells, 1, MPI_INT, 0, MPI_COMM_WORLD);
 	MPI_Bcast(&cells[0], cells.size(), CellMPI, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&particles[0], n_particles, ParticleMPI, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&particles[0], N_PTS, ParticleMPI, 0, MPI_COMM_WORLD);
 
 	printf("Tree::build_master exited......\n");
 }
@@ -208,7 +208,7 @@ void Tree::update_master() {
 	printf("[%d] Tree::update_master called......\n", R);
 
 	MPI_Status status;
-	for(int i = 0; i < n_particles; i++) {
+	for(int i = 0; i < N_PTS; i++) {
 		Particle particle;
 		MPI_Recv(&particle, 1, ParticleMPI, MPI_ANY_SOURCE, MPI_ANY_TAG,
 		         MPI_COMM_WORLD, &status);
@@ -224,7 +224,7 @@ void Tree::build_seq() {
 
 	cells.clear();
 	cells.push_back(Cell(Point(), MAX_DIM, -1));
-	for(int p = 0; p < n_particles; p++) {
+	for(int p = 0; p < N_PTS; p++) {
 		// printf("particle %d\n", p);
 		auto particle = particles[p];
 		if(particle.pm.m < 0)
@@ -333,7 +333,7 @@ void Tree::compute_forces_seq() {
 void Tree::update_seq() {
 	printf("Tree::update_seq called......\n");
 
-	for(int p = 0; p < n_particles; p++) {
+	for(int p = 0; p < N_PTS; p++) {
 		particles[p] = update_get(p);
 	}
 
@@ -373,7 +373,7 @@ void Tree::compute_forces_work(int base, int stride) {
 				q.push(ch);
 			}
 		}
-		particle.force = force;
+		particle.f = force;
 		particles[p] = particle;
 		printf("\tfinal force %s\n", force.to_string().c_str());
 	}
@@ -383,13 +383,13 @@ Particle Tree::update_get(int p) {
 	auto particle = particles[p];
 	if(particle.pm.m < 0)
 		return particle;
-	auto ax_dt = (particle.force.x / particle.pm.m) * dt;
-	auto ay_dt = (particle.force.y / particle.pm.m) * dt;
-	Point loc_new{particle.pm.p.x + (particle.vel.x + 0.5 * ax_dt) * dt,
-	              particle.pm.p.y + (particle.vel.y + 0.5 * ay_dt) * dt};
-	Point vel_new{particle.vel.x + ax_dt, particle.vel.y + ay_dt};
+	auto ax_dt = (particle.f.x / particle.pm.m) * DT;
+	auto ay_dt = (particle.f.y / particle.pm.m) * DT;
+	Point loc_new{particle.pm.p.x + (particle.v.x + 0.5 * ax_dt) * DT,
+	              particle.pm.p.y + (particle.v.y + 0.5 * ay_dt) * DT};
+	Point vel_new{particle.v.x + ax_dt, particle.v.y + ay_dt};
 	particle.pm.p = loc_new;
-	particle.vel = vel_new;
+	particle.v = vel_new;
 
 	// handle lost particles
 	if(loc_new.x < 0 || loc_new.x > MAX_DIM || loc_new.y < 0 ||
@@ -457,7 +457,7 @@ string Tree::to_string() {
 
 string Particle::to_string() {
 	char buf[1024];
-	sprintf(buf, "{ pm: %s, vel: %s, force: %s }", pm.to_string().c_str(),
-	        vel.to_string().c_str(), force.to_string().c_str());
+	sprintf(buf, "{ pm: %s, v: %s, f: %s }", pm.to_string().c_str(),
+	        v.to_string().c_str(), f.to_string().c_str());
 	return string(buf);
 }
