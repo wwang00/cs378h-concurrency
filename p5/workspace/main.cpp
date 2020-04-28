@@ -51,9 +51,13 @@ int main(int argc, char **argv) {
 		auto t0 = MPI_Wtime();
 		for(int s = 0; s < stoi(args["-s"]); s++) {
 			tree.build_seq();
+            // printf("%s\n", tree.to_string().c_str());
 			tree.compute_coms_seq();
+            // printf("%s\n", tree.to_string().c_str());
 			tree.compute_forces_seq();
+            // printf("%s\n", tree.to_string().c_str());
 			tree.update_seq();
+            // printf("%s\n", tree.to_string().c_str());
 		}
 		auto t1 = MPI_Wtime();
 		cout << (t1 - t0) << endl;

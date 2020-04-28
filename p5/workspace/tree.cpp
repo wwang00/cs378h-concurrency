@@ -53,7 +53,11 @@ inline void PointMass::normalize() {
 
 Point PointMass::force(PointMass pm) {
 	auto dp = p.diff(pm.p);
-	auto d = fmax(dp.mag(), MIN_R);
+	auto d = dp.mag();
+	if(d < MIN_R) {
+		printf("rlimit reached\n");
+		d = MIN_R;
+	}
 	auto c = G * m * pm.m / (d * d * d);
 	return Point{c * dp.x, c * dp.y};
 }
@@ -61,8 +65,8 @@ Point PointMass::force(PointMass pm) {
 Cell::Cell() {}
 
 Cell::Cell(Point loc, double dim, int parent)
-    : state(CellState::Empty), parent(parent), child_base(-1), pid(-1),
-      dim(dim), loc(loc), com(PointMass()) {}
+    : state(Empty), parent(parent), child_base(-1), pid(-1), dim(dim), loc(loc),
+      com(PointMass()) {}
 
 Tree::Tree() { particles.resize(n_particles); }
 
@@ -93,20 +97,20 @@ void Tree::compute_coms() {
 		PointMass com;
 		auto cell = cells[c];
 		switch(cell.state) {
-		case CellState::Empty:
+		case Empty:
 			com = PointMass();
 			break;
-		case CellState::Full:
+		case Full:
 			com = particles[cell.pid].pm;
 			break;
-		case CellState::Split: {
+		case Split: {
 			com = PointMass();
 			auto base = cell.child_base;
 			for(int ch = base; ch < base + 4; ch++) {
 				auto child = cells[ch];
-				if(child.state == CellState::Empty)
+				if(child.state == Empty)
 					continue;
-				if(child.state == CellState::Full) {
+				if(child.state == Full) {
 					com.add(particles[child.pid].pm);
 					continue;
 				}
@@ -240,17 +244,17 @@ void Tree::build_seq() {
 			Point mid{xm, ym};
 
 			switch(curr.state) {
-			case CellState::Empty: {
+			case Empty: {
 				// printf("\tswitch state Empty\n");
 
 				// found a place to insert
-				curr.state = CellState::Full;
+				curr.state = Full;
 				curr.pid = p;
 				cells[cid] = curr;
 				working = false;
 				break;
 			}
-			case CellState::Full: {
+			case Full: {
 				// printf("\tswitch state Full\n");
 
 				// split and make empty subcells
@@ -264,16 +268,16 @@ void Tree::build_seq() {
 				auto qc = quadrant(particles[curr.pid].pm.p, mid);
 				auto moved_idx = curr.child_base + qc;
 				auto curr_moved = cells[moved_idx];
-				curr_moved.state = CellState::Full;
+				curr_moved.state = Full;
 				curr_moved.pid = curr.pid;
 				cells[moved_idx] = curr_moved;
 				curr.pid = -1;
 
 				// go straight to case Split
-				curr.state = CellState::Split;
+				curr.state = Split;
 				cells[cid] = curr;
 			}
-			case CellState::Split: {
+			case Split: {
 				// printf("\tswitch state Split\n");
 
 				// recurse into the right quadrant
@@ -297,10 +301,10 @@ void Tree::compute_coms_seq() {
 	// calculate coms in reverse order
 	for(int c = cells.size() - 1; c >= 0; c--) {
 		auto cell = cells[c];
-		if(cell.state == CellState::Empty)
+		if(cell.state == Empty)
 			continue;
 		PointMass com;
-		if(cell.state == CellState::Full) {
+		if(cell.state == Full) {
 			com = particles[cell.pid].pm;
 		} else { // Split
 			com = PointMass();
@@ -339,6 +343,7 @@ void Tree::update_seq() {
 void Tree::compute_forces_work(int base, int stride) {
 	queue<int> q; // queue of cell ids
 	for(int p = base; p < particles.size(); p += stride) {
+		printf("particle %d\n", p);
 		auto particle = particles[p];
 		if(particle.pm.m < 0)
 			continue;
@@ -350,16 +355,16 @@ void Tree::compute_forces_work(int base, int stride) {
 			auto c = q.front();
 			q.pop();
 			auto cell = cells[c];
-			if(cell.state == CellState::Empty)
+			if(cell.state == Empty)
 				continue;
-			if(cell.state == CellState::Full) {
+			if(cell.state == Full) {
 				if(cell.pid != p)
 					force.add(particle.pm.force(particles[cell.pid].pm));
 				continue;
 			}
 			// Split
 			if(mac(particle, cell)) {
-                printf("mac satisfied particle %d cell %d\n", p, c);
+				printf("\tmac satisfied cell %d\n", c);
 				force.add(particle.pm.force(cell.com));
 				continue;
 			}
@@ -370,6 +375,7 @@ void Tree::compute_forces_work(int base, int stride) {
 		}
 		particle.force = force;
 		particles[p] = particle;
+		printf("\tfinal force %s\n", force.to_string().c_str());
 	}
 }
 
@@ -377,11 +383,11 @@ Particle Tree::update_get(int p) {
 	auto particle = particles[p];
 	if(particle.pm.m < 0)
 		return particle;
-	auto ax_dt_2 = 0.5 * (particle.force.x / particle.pm.m) * dt;
-	auto ay_dt_2 = 0.5 * (particle.force.y / particle.pm.m) * dt;
-	Point loc_new{particle.pm.p.x + (particle.vel.x + ax_dt_2) * dt,
-	              particle.pm.p.y + (particle.vel.y + ay_dt_2) * dt};
-	Point vel_new{particle.vel.x + ax_dt_2, particle.vel.y + ay_dt_2};
+	auto ax_dt = (particle.force.x / particle.pm.m) * dt;
+	auto ay_dt = (particle.force.y / particle.pm.m) * dt;
+	Point loc_new{particle.pm.p.x + (particle.vel.x + 0.5 * ax_dt) * dt,
+	              particle.pm.p.y + (particle.vel.y + 0.5 * ay_dt) * dt};
+	Point vel_new{particle.vel.x + ax_dt, particle.vel.y + ay_dt};
 	particle.pm.p = loc_new;
 	particle.vel = vel_new;
 
@@ -415,13 +421,13 @@ string Cell::to_string() {
 	char buf[1024];
 	string state_str;
 	switch(state) {
-	case CellState::Empty:
+	case Empty:
 		state_str = "Empty";
 		break;
-	case CellState::Full:
+	case Full:
 		state_str = "Full";
 		break;
-	case CellState::Split:
+	case Split:
 		state_str = "Split";
 		break;
 	default:
