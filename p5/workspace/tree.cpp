@@ -166,12 +166,11 @@ void Tree::update() {
 	// printf("[%d] Tree::update called......\n", R);
 
 	auto start = R * n_changed;
-	if(start >= N_PTS)
-		return;
 	auto end = start + n_changed;
 	if(end > N_PTS)
 		end = N_PTS;
-	update_particles(start, end);
+	if(start < N_PTS)
+		update_particles(start, end);
 	for(int r = 0; r < M; r++) {
 		auto start = r * n_changed;
 		if(start >= N_PTS)
