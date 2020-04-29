@@ -50,6 +50,7 @@ int main(int argc, char **argv) {
 		// do work
 		auto t0 = MPI_Wtime();
 		for(int s = 0; s < stoi(args["-s"]); s++) {
+			printf("%d\n", s);
 			tree.build_seq();
 			// printf("%s\n", tree.to_string().c_str());
 			tree.compute_coms_seq();
@@ -66,6 +67,7 @@ int main(int argc, char **argv) {
 			// do work
 			auto t0 = MPI_Wtime();
 			for(int s = 0; s < stoi(args["-s"]); s++) {
+				printf("%d\n", s);
 				tree.build_master();
 				tree.compute_coms_master();
 				tree.compute_forces_master();
