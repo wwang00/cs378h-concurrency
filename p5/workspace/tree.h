@@ -22,7 +22,7 @@ struct PointMass {
 	Point p;
 	double m;
 
-	void add(PointMass pm);
+	void join(PointMass pm);
 	void normalize();
 	Point force(PointMass pm);
 
@@ -56,8 +56,8 @@ struct Cell {
 class Tree {
 	std::vector<Cell> cells;
 
-	void compute_forces_work(int base, int stride);
-	Particle update_get(int p);
+	void compute_forces(int base, int stride);
+	void update_particles(int base, int stride);
 
 public:
 	std::vector<Particle> particles;
@@ -65,18 +65,12 @@ public:
 	Tree();
 
 	void build();
-	void compute_coms();
-	void compute_forces();
 	void update();
 
 	void build_master();
-	void compute_coms_master();
-	void compute_forces_master();
 	void update_master();
 
 	void build_seq();
-	void compute_coms_seq();
-	void compute_forces_seq();
 	void update_seq();
 
 	std::string to_string();

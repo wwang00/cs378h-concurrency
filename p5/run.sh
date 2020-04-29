@@ -1,6 +1,6 @@
 #!/bin/bash
 
-FILE=nb-100
+FILE=nb-10
 IFILE=$PWD/input/$FILE.txt
 OFILE=$PWD/output/$FILE.out
 

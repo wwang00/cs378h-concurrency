@@ -53,10 +53,6 @@ int main(int argc, char **argv) {
 			printf("%d\n", s);
 			tree.build_seq();
 			// printf("%s\n", tree.to_string().c_str());
-			tree.compute_coms_seq();
-			// printf("%s\n", tree.to_string().c_str());
-			tree.compute_forces_seq();
-			// printf("%s\n", tree.to_string().c_str());
 			tree.update_seq();
 			// printf("%s\n", tree.to_string().c_str());
 		}
@@ -69,9 +65,9 @@ int main(int argc, char **argv) {
 			for(int s = 0; s < stoi(args["-s"]); s++) {
 				printf("%d\n", s);
 				tree.build_master();
-				tree.compute_coms_master();
-				tree.compute_forces_master();
+				// printf("%s\n", tree.to_string().c_str());
 				tree.update_master();
+				// printf("%s\n", tree.to_string().c_str());
 			}
 			auto t1 = MPI_Wtime();
 			cout << (t1 - t0) << endl;
@@ -79,8 +75,6 @@ int main(int argc, char **argv) {
 			// do work
 			for(int s = 0; s < stoi(args["-s"]); s++) {
 				tree.build();
-				tree.compute_coms();
-				tree.compute_forces();
 				tree.update();
 			}
 		}

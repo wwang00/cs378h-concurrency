@@ -35,18 +35,21 @@ Point Point::diff(Point p) { return Point{p.x - x, p.y - y}; }
 
 double Point::norm() { return sqrt(x * x + y * y); }
 
-inline void Point::add(Point p) {
+void Point::add(Point p) {
 	x += p.x;
 	y += p.y;
 }
 
-inline void PointMass::add(PointMass pm) {
-	p.x += pm.p.x * pm.m;
-	p.y += pm.p.y * pm.m;
-	m += pm.m;
+void PointMass::join(PointMass pm) {
+	auto xt = p.x * m + pm.p.x * pm.m;
+	auto yt = p.y * m + pm.p.y * pm.m;
+	auto mt = m + pm.m;
+	p.x = xt / mt;
+	p.y = yt / mt;
+	m = mt;
 }
 
-inline void PointMass::normalize() {
+void PointMass::normalize() {
 	p.x /= m;
 	p.y /= m;
 }
@@ -85,87 +88,15 @@ void Tree::build() {
 	// printf("[%d] Tree::build exited......\n", R);
 }
 
-void Tree::compute_coms() {
-	// printf("[%d] Tree::compute_coms called......\n", R);
-
-	int start = cells.size() - 1;
-	if(R - 1 > start) {
-		// printf("[%d] Tree::compute_coms exited......\n", R);
-		return;
-	}
-	while(start % (M - 1) != R - 1) {
-		start--;
-	}
-	for(int c = start; c >= 0; c -= M - 1) {
-		PointMass com;
-		auto cell = cells[c];
-		switch(cell.state) {
-		case Empty:
-			com = PointMass();
-			break;
-		case Full:
-			com = particles[cell.pid].pm;
-			break;
-		case Split: {
-			com = PointMass();
-			auto base = cell.child_base;
-			for(int ch = base; ch < base + 4; ch++) {
-				auto child = cells[ch];
-				if(child.state == Empty)
-					continue;
-				if(child.state == Full) {
-					com.add(particles[child.pid].pm);
-					continue;
-				}
-				// recv from Split child
-				PointMass child_com;
-				auto source = ch % (M - 1) + 1;
-				if(source == R) {
-					child_com = child.com;
-				} else {
-					MPI_Recv(&child_com, 1, PointMassMPI, source, ch,
-					         MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-				}
-				com.add(child_com);
-			}
-			com.normalize();
-			// send to parent
-			if(c > 0) {
-				auto dest = cell.parent % (M - 1) + 1;
-				if(dest != R)
-					MPI_Send(&com, 1, PointMassMPI, dest, c, MPI_COMM_WORLD);
-			}
-			break;
-		}
-		default:
-			printf("[%d] Tree::compute_coms BAD STATE %d\n", R, cell.state);
-			break;
-		}
-		// store locally
-		cell.com = com;
-		cells[c] = cell;
-		// send to master
-		MPI_Send(&com, 1, PointMassMPI, 0, c, MPI_COMM_WORLD);
-	}
-
-	// printf("[%d] Tree::compute_coms exited......\n", R);
-}
-
-void Tree::compute_forces() {
-	// printf("[%d] Tree::compute_forces called......\n", R);
-
-	MPI_Bcast(&cells[0], cells.size(), CellMPI, 0, MPI_COMM_WORLD);
-	compute_forces_work(R - 1, M - 1);
-
-	// printf("[%d] Tree::compute_forces exited......\n", R);
-}
-
 void Tree::update() {
 	// printf("[%d] Tree::update called......\n", R);
 
-	for(int p = R - 1; p < N_PTS; p += M - 1) {
-		auto particle = update_get(p);
-		MPI_Send(&particle, 1, ParticleMPI, 0, p, MPI_COMM_WORLD);
+	auto base = R - 1;
+	auto stride = M - 1;
+	compute_forces(base, stride);
+	update_particles(base, stride);
+	for(int p = base; p < N_PTS; p += stride) {
+		MPI_Send(&particles[p], 1, ParticleMPI, 0, p, MPI_COMM_WORLD);
 	}
 
 	// printf("[%d] Tree::update exited......\n", R);
@@ -182,29 +113,6 @@ void Tree::build_master() {
 	MPI_Bcast(&particles[0], N_PTS, ParticleMPI, 0, MPI_COMM_WORLD);
 
 	// printf("Tree::build_master exited......\n");
-}
-
-void Tree::compute_coms_master() {
-	// printf("Tree::compute_coms_master called......\n");
-
-	MPI_Status status;
-	for(int i = 0; i < cells.size(); i++) {
-		PointMass com;
-		MPI_Recv(&com, 1, PointMassMPI, MPI_ANY_SOURCE, MPI_ANY_TAG,
-		         MPI_COMM_WORLD, &status);
-		auto c = status.MPI_TAG;
-		cells[c].com = com;
-	}
-
-	// printf("Tree::compute_coms_master exited......\n");
-}
-
-void Tree::compute_forces_master() {
-	// printf("Tree::compute_forces_master called......\n");
-
-	MPI_Bcast(&cells[0], cells.size(), CellMPI, 0, MPI_COMM_WORLD);
-
-	// printf("Tree::compute_forces_master exited......\n");
 }
 
 void Tree::update_master() {
@@ -239,6 +147,9 @@ void Tree::build_seq() {
 		while(working) {
 			// printf("\tat cid %d\n", cid);
 			auto curr = cells[cid];
+			curr.com.join(particle.pm);
+			// printf("\tnew com %s\n", curr.com.to_string().c_str());
+
 			auto dim_half = curr.dim / 2;
 			auto xc = curr.loc.x;
 			auto yc = curr.loc.y;
@@ -254,6 +165,7 @@ void Tree::build_seq() {
 				curr.state = Full;
 				curr.pid = p;
 				cells[cid] = curr;
+
 				working = false;
 				break;
 			}
@@ -261,6 +173,7 @@ void Tree::build_seq() {
 				// printf("\tswitch state Full\n");
 
 				// split and make empty subcells
+				curr.state = Split;
 				curr.child_base = cells.size();
 				cells.push_back(Cell(Point{xc, yc}, dim_half, cid));
 				cells.push_back(Cell(Point{xc, ym}, dim_half, cid));
@@ -273,15 +186,20 @@ void Tree::build_seq() {
 				auto curr_moved = cells[moved_idx];
 				curr_moved.state = Full;
 				curr_moved.pid = curr.pid;
+				curr_moved.com = particles[curr.pid].pm;
 				cells[moved_idx] = curr_moved;
 				curr.pid = -1;
-
-				// go straight to case Split
-				curr.state = Split;
 				cells[cid] = curr;
+
+				// recurse into the right quadrant
+				auto qp = quadrant(particle.pm.p, mid);
+				cid = curr.child_base + qp;
+				break;
 			}
 			case Split: {
 				// printf("\tswitch state Split\n");
+
+				cells[cid] = curr;
 
 				// recurse into the right quadrant
 				auto qp = quadrant(particle.pm.p, mid);
@@ -298,54 +216,18 @@ void Tree::build_seq() {
 	// printf("Tree::build_seq exited......\n");
 }
 
-void Tree::compute_coms_seq() {
-	// printf("Tree::compute_coms_seq called......\n");
-
-	// calculate coms in reverse order
-	for(int c = cells.size() - 1; c >= 0; c--) {
-		auto cell = cells[c];
-		if(cell.state == Empty)
-			continue;
-		PointMass com;
-		if(cell.state == Full) {
-			com = particles[cell.pid].pm;
-		} else { // Split
-			com = PointMass();
-			auto base = cell.child_base;
-			for(int ch = base; ch < base + 4; ch++) {
-				auto child = cells[ch];
-				com.add(child.com);
-			}
-			com.normalize();
-		}
-		cell.com = com;
-		cells[c] = cell;
-	}
-
-	// printf("Tree::compute_coms_seq exited......\n");
-}
-
-void Tree::compute_forces_seq() {
-	// printf("Tree::compute_forces_seq called......\n");
-
-	compute_forces_work(0, 1);
-
-	// printf("Tree::compute_forces_seq exited......\n");
-}
-
 void Tree::update_seq() {
 	// printf("Tree::update_seq called......\n");
 
-	for(int p = 0; p < N_PTS; p++) {
-		particles[p] = update_get(p);
-	}
+	compute_forces(0, 1);
+	update_particles(0, 1);
 
 	// printf("Tree::update_seq exited......\n");
 }
 
-void Tree::compute_forces_work(int base, int stride) {
+void Tree::compute_forces(int base, int stride) {
 	queue<int> q; // queue of cell ids
-	for(int p = base; p < particles.size(); p += stride) {
+	for(int p = base; p < N_PTS; p += stride) {
 		// printf("particle %d\n", p);
 		auto particle = particles[p];
 		if(particle.pm.m < 0)
@@ -382,26 +264,28 @@ void Tree::compute_forces_work(int base, int stride) {
 	}
 }
 
-Particle Tree::update_get(int p) {
-	auto particle = particles[p];
-	if(particle.pm.m < 0)
-		return particle;
-	auto ax_dt = (particle.f.x / particle.pm.m) * DT;
-	auto ay_dt = (particle.f.y / particle.pm.m) * DT;
-	Point loc_new{particle.pm.p.x + (particle.v.x + 0.5 * ax_dt) * DT,
-	              particle.pm.p.y + (particle.v.y + 0.5 * ay_dt) * DT};
-	Point vel_new{particle.v.x + ax_dt, particle.v.y + ay_dt};
-	particle.pm.p = loc_new;
-	particle.v = vel_new;
+void Tree::update_particles(int base, int stride) {
+	for(int p = base; p < N_PTS; p += stride) {
+		auto particle = particles[p];
+		if(particle.pm.m < 0)
+			continue;
+		auto ax_dt = (particle.f.x / particle.pm.m) * DT;
+		auto ay_dt = (particle.f.y / particle.pm.m) * DT;
+		Point loc_new{particle.pm.p.x + (particle.v.x + 0.5 * ax_dt) * DT,
+		              particle.pm.p.y + (particle.v.y + 0.5 * ay_dt) * DT};
+		Point vel_new{particle.v.x + ax_dt, particle.v.y + ay_dt};
+		particle.pm.p = loc_new;
+		particle.v = vel_new;
 
-	// handle lost particles
-	if(loc_new.x < 0 || loc_new.x > MAX_DIM || loc_new.y < 0 ||
-	   loc_new.y > MAX_DIM) {
-		printf("particle %d was lost\n", p);
-		particle.pm.m = -1;
+		// handle lost particles
+		if(loc_new.x < 0 || loc_new.x > MAX_DIM || loc_new.y < 0 ||
+		   loc_new.y > MAX_DIM) {
+			printf("particle %d was lost\n", p);
+			particle.pm.m = -1;
+		}
+
+		particles[p] = particle;
 	}
-
-	return particle;
 }
 
 ///////////////
