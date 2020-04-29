@@ -230,8 +230,12 @@ void Tree::update_particles(int base, int stride, bool send) {
 	for(int p = base; p < N_PTS; p += stride) {
 		// printf("particle %d\n", p);
 		auto particle = particles[p];
-		if(particle.pm.m < 0)
+		if(particle.pm.m < 0) {
+			if(send)
+				MPI_Send(&particles[p], sizeof(Particle), MPI_BYTE, 0, p,
+				         MPI_COMM_WORLD);
 			continue;
+		}
 
 		// compute force
 		auto force = Point();

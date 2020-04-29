@@ -38,21 +38,21 @@ int main(int argc, char **argv) {
 	if(R == 0) {
 		// read particle start configurations
 		for(int p = 0; p < N_PTS; p++) {
-			auto particle = Particle();
 			int id;
-			ifile >> id >> particle.pm.p.x >> particle.pm.p.y >>
-			    particle.pm.m >> particle.v.x >> particle.v.y;
-			tree.particles[p] = particle;
+			double x, y, m, vx, vy;
+			ifile >> id >> x >> y >> m >> vx >> vy;
+			tree.particles[p] =
+			    Particle{PointMass{Point{x, y}, m}, Point{vx, vy}, Point()};
 		}
 	}
 
-    auto iters = stoi(args["-s"]);
+	auto iters = stoi(args["-s"]);
 
 	if(M == 1) { // sequential
 		// do work
 		auto t0 = MPI_Wtime();
 		for(int s = 0; s < iters; s++) {
-			printf("%d\n", s);
+			// printf("%d\n", s);
 			tree.build_seq();
 			// printf("%s\n", tree.to_string().c_str());
 			tree.update_seq();
@@ -65,7 +65,7 @@ int main(int argc, char **argv) {
 			// do work
 			auto t0 = MPI_Wtime();
 			for(int s = 0; s < iters; s++) {
-				printf("%d\n", s);
+				// printf("%d\n", s);
 				tree.build_master();
 				// printf("%s\n", tree.to_string().c_str());
 				tree.update_master();
@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
 
 	// write results
 	if(R == 0) {
-		cout << tree.to_string() << endl;
+		// cout << tree.to_string() << endl;
 
 		ofstream ofile(args["-o"]);
 		ofile << std::scientific;

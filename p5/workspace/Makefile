@@ -9,6 +9,9 @@ all : $(PROG)
 $(PROG) : $(OBJS)
 	$(CC) $(LDFLAGS) -o $(PROG) $(OBJS)
 
+main.o : main.cpp
+	$(CC) $(CPPFLAGS) -c main.cpp
+
 %.o : %.cpp %.h
 	$(CC) $(CPPFLAGS) -c $<
 
