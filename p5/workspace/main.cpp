@@ -35,15 +35,13 @@ int main(int argc, char **argv) {
 	ifile >> N_PTS;
 	auto tree = Tree();
 
-	if(R == 0) {
-		// read particle start configurations
-		for(int p = 0; p < N_PTS; p++) {
-			int id;
-			double x, y, m, vx, vy;
-			ifile >> id >> x >> y >> m >> vx >> vy;
-			tree.particles[p] =
-			    Particle{PointMass{Point{x, y}, m}, Point{vx, vy}, Point()};
-		}
+	// read particle start configurations
+	for(int p = 0; p < N_PTS; p++) {
+		int id;
+		double x, y, m, vx, vy;
+		ifile >> id >> x >> y >> m >> vx >> vy;
+		tree.particles[p] =
+		    Particle{PointMass{Point{x, y}, m}, Point{vx, vy}, Point()};
 	}
 
 	auto iters = stoi(args["-s"]);
@@ -66,9 +64,9 @@ int main(int argc, char **argv) {
 			auto t0 = MPI_Wtime();
 			for(int s = 0; s < iters; s++) {
 				// printf("%d\n", s);
-				tree.build_master();
+				tree.build();
 				// printf("%s\n", tree.to_string().c_str());
-				tree.update_master();
+				tree.update();
 				// printf("%s\n", tree.to_string().c_str());
 			}
 			auto t1 = MPI_Wtime();

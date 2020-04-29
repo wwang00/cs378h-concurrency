@@ -23,7 +23,6 @@ struct PointMass {
 	double m;
 
 	void join(PointMass pm);
-	void normalize();
 	Point force(PointMass pm);
 
 	std::string to_string();
@@ -55,7 +54,6 @@ struct Cell {
 
 class Tree {
 	std::vector<Cell> cells;
-	Particle *particles_changed;
 	int n_changed;
 
 	void update_particles(int base, int stride);

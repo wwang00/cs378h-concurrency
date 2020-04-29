@@ -49,11 +49,6 @@ void PointMass::join(PointMass pm) {
 	m = mt;
 }
 
-void PointMass::normalize() {
-	p.x /= m;
-	p.y /= m;
-}
-
 Point PointMass::force(PointMass pm) {
 	auto dp = p.diff(pm.p);
 	auto d = dp.norm();
@@ -76,19 +71,14 @@ Cell::Cell(Point loc, double dim, int parent)
 
 Tree::Tree() {
 	particles.resize(N_PTS);
-	if(M == 1) {
-		n_changed = N_PTS;
-	} else {
-		n_changed = N_PTS / (M - 1) + 1;
-	}
-	particles_changed = (Particle *)calloc(n_changed, sizeof(Particle));
+	n_changed = N_PTS / M;
+	if(n_changed * M != N_PTS)
+		n_changed++;
 }
 
 void Tree::build() {
 	// printf("[%d] Tree::build called......\n", R);
 
-	MPI_Bcast(&particles[0], N_PTS * sizeof(Particle), MPI_BYTE, 0,
-	          MPI_COMM_WORLD);
 	build_seq();
 
 	// printf("[%d] Tree::build exited......\n", R);
@@ -97,42 +87,55 @@ void Tree::build() {
 void Tree::update() {
 	// printf("[%d] Tree::update called......\n", R);
 
-	auto base = R - 1;
-	auto stride = M - 1;
-	update_particles(base, stride);
-	MPI_Send(&particles_changed[0], n_changed * sizeof(Particle), MPI_BYTE, 0,
-	         0, MPI_COMM_WORLD);
+	auto start = R * n_changed;
+	if(start >= N_PTS)
+		return;
+	auto end = start + n_changed;
+	if(end > N_PTS)
+		end = N_PTS;
+	update_particles(start, end);
+	for(int r = 0; r < M; r++) {
+		auto start = r * n_changed;
+		if(start >= N_PTS)
+			continue;
+		auto end = start + n_changed;
+		if(end > N_PTS)
+			end = N_PTS;
+		auto count = end - start;
+		MPI_Bcast(&particles[start], count * sizeof(Particle), MPI_BYTE, r,
+		          MPI_COMM_WORLD);
+	}
 
 	// printf("[%d] Tree::update exited......\n", R);
 }
 
-void Tree::build_master() {
-	// printf("Tree::build_master called......\n");
+// void Tree::build_master() {
+// 	// printf("Tree::build_master called......\n");
 
-	MPI_Bcast(&particles[0], N_PTS * sizeof(Particle), MPI_BYTE, 0,
-	          MPI_COMM_WORLD);
-	build_seq();
+// 	MPI_Bcast(&particles[0], N_PTS * sizeof(Particle), MPI_BYTE, 0,
+// 	          MPI_COMM_WORLD);
+// 	build_seq();
 
-	// printf("Tree::build_master exited......\n");
-}
+// 	// printf("Tree::build_master exited......\n");
+// }
 
-void Tree::update_master() {
-	// printf("[%d] Tree::update_master called......\n", R);
+// void Tree::update_master() {
+// 	// printf("[%d] Tree::update_master called......\n", R);
 
-	auto stride = M - 1;
-	MPI_Status status;
-	for(int r = 1; r < M; r++) {
-		MPI_Recv(&particles_changed[0], n_changed * sizeof(Particle), MPI_BYTE,
-		         MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-		int base = status.MPI_SOURCE - 1;
-		int changed_idx = 0;
-		for(int p = base; p < N_PTS; p += stride) {
-			particles[p] = particles_changed[changed_idx++];
-		}
-	}
+// 	auto stride = M - 1;
+// 	MPI_Status status;
+// 	for(int r = 1; r < M; r++) {
+// 		MPI_Recv(&particles_changed[0], n_changed * sizeof(Particle), MPI_BYTE,
+// 		         MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+// 		int base = status.MPI_SOURCE - 1;
+// 		int changed_idx = 0;
+// 		for(int p = base; p < N_PTS; p += stride) {
+// 			particles[p] = particles_changed[changed_idx++];
+// 		}
+// 	}
 
-	// printf("[%d] Tree::update_master exited......\n", R);
-}
+// 	// printf("[%d] Tree::update_master exited......\n", R);
+// }
 
 void Tree::build_seq() {
 	// printf("Tree::build_seq called......\n");
@@ -223,22 +226,19 @@ void Tree::build_seq() {
 void Tree::update_seq() {
 	// printf("Tree::update_seq called......\n");
 
-	update_particles(0, 1);
+	update_particles(0, N_PTS);
 
 	// printf("Tree::update_seq exited......\n");
 }
 
-void Tree::update_particles(int base, int stride) {
+void Tree::update_particles(int start, int end) {
 	// compute forces
 	queue<int> q; // queue of cell ids
-	int changed_idx = 0;
-	for(int p = base; p < N_PTS; p += stride) {
+	for(int p = start; p < end; p++) {
 		// printf("particle %d\n", p);
 		auto particle = particles[p];
-		if(particle.pm.m < 0) {
-			particles_changed[changed_idx++] = particle;
+		if(particle.pm.m < 0)
 			continue;
-		}
 
 		// compute force
 		auto force = Point();
@@ -283,7 +283,6 @@ void Tree::update_particles(int base, int stride) {
 			particle.pm.m = -1;
 		}
 		particles[p] = particle;
-		particles_changed[changed_idx++] = particle;
 	}
 }
 
