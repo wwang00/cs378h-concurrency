@@ -77,68 +77,7 @@ Tree::Tree() {
 }
 
 void Tree::build() {
-	// printf("[%d] Tree::build called......\n", R);
-
-	build_seq();
-
-	// printf("[%d] Tree::build exited......\n", R);
-}
-
-void Tree::update() {
-	// printf("[%d] Tree::update called......\n", R);
-
-	auto start = R * n_changed;
-	if(start >= N_PTS)
-		return;
-	auto end = start + n_changed;
-	if(end > N_PTS)
-		end = N_PTS;
-	update_particles(start, end);
-	for(int r = 0; r < M; r++) {
-		auto start = r * n_changed;
-		if(start >= N_PTS)
-			continue;
-		auto end = start + n_changed;
-		if(end > N_PTS)
-			end = N_PTS;
-		auto count = end - start;
-		MPI_Bcast(&particles[start], count * sizeof(Particle), MPI_BYTE, r,
-		          MPI_COMM_WORLD);
-	}
-
-	// printf("[%d] Tree::update exited......\n", R);
-}
-
-// void Tree::build_master() {
-// 	// printf("Tree::build_master called......\n");
-
-// 	MPI_Bcast(&particles[0], N_PTS * sizeof(Particle), MPI_BYTE, 0,
-// 	          MPI_COMM_WORLD);
-// 	build_seq();
-
-// 	// printf("Tree::build_master exited......\n");
-// }
-
-// void Tree::update_master() {
-// 	// printf("[%d] Tree::update_master called......\n", R);
-
-// 	auto stride = M - 1;
-// 	MPI_Status status;
-// 	for(int r = 1; r < M; r++) {
-// 		MPI_Recv(&particles_changed[0], n_changed * sizeof(Particle), MPI_BYTE,
-// 		         MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-// 		int base = status.MPI_SOURCE - 1;
-// 		int changed_idx = 0;
-// 		for(int p = base; p < N_PTS; p += stride) {
-// 			particles[p] = particles_changed[changed_idx++];
-// 		}
-// 	}
-
-// 	// printf("[%d] Tree::update_master exited......\n", R);
-// }
-
-void Tree::build_seq() {
-	// printf("Tree::build_seq called......\n");
+	// printf("Tree::build called......\n");
 
 	cells.clear();
 	cells.push_back(Cell(Point(), MAX_DIM, -1));
@@ -214,13 +153,38 @@ void Tree::build_seq() {
 				break;
 			}
 			default:
-				printf("Tree::build_seq BAD STATE\n");
+				printf("Tree::build BAD STATE\n");
 				return;
 			}
 		}
 	}
 
-	// printf("Tree::build_seq exited......\n");
+	// printf("Tree::build exited......\n");
+}
+
+void Tree::update() {
+	// printf("[%d] Tree::update called......\n", R);
+
+	auto start = R * n_changed;
+	if(start >= N_PTS)
+		return;
+	auto end = start + n_changed;
+	if(end > N_PTS)
+		end = N_PTS;
+	update_particles(start, end);
+	for(int r = 0; r < M; r++) {
+		auto start = r * n_changed;
+		if(start >= N_PTS)
+			continue;
+		auto end = start + n_changed;
+		if(end > N_PTS)
+			end = N_PTS;
+		auto count = end - start;
+		MPI_Bcast(&particles[start], count * sizeof(Particle), MPI_BYTE, r,
+		          MPI_COMM_WORLD);
+	}
+
+	// printf("[%d] Tree::update exited......\n", R);
 }
 
 void Tree::update_seq() {

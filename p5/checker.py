@@ -1,16 +1,17 @@
-from math import sqrt
+F = 'data.dat'
 
-X = 0.000031
-Y = 0.526151
-M = 17.556
-G = 0.0001
+avgs = {}
 
-x, y = 2.747091, 2.355906
-m = 19.304
+with open(f"data/{F}", 'r') as ifile:
+    last_key = None
+    for line in ifile:
+        if last_key is None:
+            last_key = int(line)
+        else:
+            if last_key in avgs.keys():
+                avgs[last_key] += float(line)
+            else:
+                avgs[last_key] = float(line)
+            last_key = None
 
-dx = x - X
-dy = y - Y
-d = sqrt(dx ** 2 + dy ** 2)
-c = G * M * m / (d ** 3)
-print(c * dx)
-print(c * dy)
+print(avgs)

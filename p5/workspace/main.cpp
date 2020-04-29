@@ -21,7 +21,7 @@ int main(int argc, char **argv) {
 	MPI_Init(&argc, &argv);
 	MPI_Comm_size(MPI_COMM_WORLD, &M);
 	MPI_Comm_rank(MPI_COMM_WORLD, &R);
-	printf("enter processor %d of %d\n", R, M);
+	// printf("enter processor %d of %d\n", R, M);
 
 	init_MPI_structs();
 
@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
 		auto t0 = MPI_Wtime();
 		for(int s = 0; s < iters; s++) {
 			// printf("%d\n", s);
-			tree.build_seq();
+			tree.build();
 			// printf("%s\n", tree.to_string().c_str());
 			tree.update_seq();
 			// printf("%s\n", tree.to_string().c_str());

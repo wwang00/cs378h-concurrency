@@ -66,10 +66,6 @@ public:
 	void build();
 	void update();
 
-	void build_master();
-	void update_master();
-
-	void build_seq();
 	void update_seq();
 
 	std::string to_string();
