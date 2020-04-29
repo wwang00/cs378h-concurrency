@@ -46,10 +46,12 @@ int main(int argc, char **argv) {
 		}
 	}
 
+    auto iters = stoi(args["-s"]);
+
 	if(M == 1) { // sequential
 		// do work
 		auto t0 = MPI_Wtime();
-		for(int s = 0; s < stoi(args["-s"]); s++) {
+		for(int s = 0; s < iters; s++) {
 			printf("%d\n", s);
 			tree.build_seq();
 			// printf("%s\n", tree.to_string().c_str());
@@ -62,7 +64,7 @@ int main(int argc, char **argv) {
 		if(R == 0) {
 			// do work
 			auto t0 = MPI_Wtime();
-			for(int s = 0; s < stoi(args["-s"]); s++) {
+			for(int s = 0; s < iters; s++) {
 				printf("%d\n", s);
 				tree.build_master();
 				// printf("%s\n", tree.to_string().c_str());
@@ -73,7 +75,7 @@ int main(int argc, char **argv) {
 			cout << (t1 - t0) << endl;
 		} else {
 			// do work
-			for(int s = 0; s < stoi(args["-s"]); s++) {
+			for(int s = 0; s < iters; s++) {
 				tree.build();
 				tree.update();
 			}

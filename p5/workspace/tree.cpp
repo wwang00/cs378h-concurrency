@@ -80,10 +80,12 @@ void Tree::build() {
 	// printf("[%d] Tree::build called......\n", R);
 
 	int n_cells;
-	MPI_Bcast(&n_cells, 1, MPI_INT, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&n_cells, sizeof(int), MPI_BYTE, 0, MPI_COMM_WORLD);
 	cells.resize(n_cells);
-	MPI_Bcast(&cells[0], cells.size(), CellMPI, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&particles[0], N_PTS, ParticleMPI, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&cells[0], cells.size() * sizeof(Cell), MPI_BYTE, 0,
+	          MPI_COMM_WORLD);
+	MPI_Bcast(&particles[0], N_PTS * sizeof(Particle), MPI_BYTE, 0,
+	          MPI_COMM_WORLD);
 
 	// printf("[%d] Tree::build exited......\n", R);
 }
@@ -93,11 +95,7 @@ void Tree::update() {
 
 	auto base = R - 1;
 	auto stride = M - 1;
-	compute_forces(base, stride);
-	update_particles(base, stride);
-	for(int p = base; p < N_PTS; p += stride) {
-		MPI_Send(&particles[p], 1, ParticleMPI, 0, p, MPI_COMM_WORLD);
-	}
+	update_particles(base, stride, true);
 
 	// printf("[%d] Tree::update exited......\n", R);
 }
@@ -108,9 +106,11 @@ void Tree::build_master() {
 	build_seq();
 
 	int n_cells = cells.size();
-	MPI_Bcast(&n_cells, 1, MPI_INT, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&cells[0], cells.size(), CellMPI, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&particles[0], N_PTS, ParticleMPI, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&n_cells, sizeof(int), MPI_BYTE, 0, MPI_COMM_WORLD);
+	MPI_Bcast(&cells[0], cells.size() * sizeof(Cell), MPI_BYTE, 0,
+	          MPI_COMM_WORLD);
+	MPI_Bcast(&particles[0], N_PTS * sizeof(Particle), MPI_BYTE, 0,
+	          MPI_COMM_WORLD);
 
 	// printf("Tree::build_master exited......\n");
 }
@@ -121,8 +121,8 @@ void Tree::update_master() {
 	MPI_Status status;
 	for(int i = 0; i < N_PTS; i++) {
 		Particle particle;
-		MPI_Recv(&particle, 1, ParticleMPI, MPI_ANY_SOURCE, MPI_ANY_TAG,
-		         MPI_COMM_WORLD, &status);
+		MPI_Recv(&particle, sizeof(Particle), MPI_BYTE, MPI_ANY_SOURCE,
+		         MPI_ANY_TAG, MPI_COMM_WORLD, &status);
 		auto p = status.MPI_TAG;
 		particles[p] = particle;
 	}
@@ -219,13 +219,13 @@ void Tree::build_seq() {
 void Tree::update_seq() {
 	// printf("Tree::update_seq called......\n");
 
-	compute_forces(0, 1);
 	update_particles(0, 1);
 
 	// printf("Tree::update_seq exited......\n");
 }
 
-void Tree::compute_forces(int base, int stride) {
+void Tree::update_particles(int base, int stride, bool send) {
+	// compute forces
 	queue<int> q; // queue of cell ids
 	for(int p = base; p < N_PTS; p += stride) {
 		// printf("particle %d\n", p);
@@ -244,7 +244,7 @@ void Tree::compute_forces(int base, int stride) {
 				continue;
 			if(cell.state == Full) {
 				if(cell.pid != p)
-					force.add(particle.pm.force(particles[cell.pid].pm));
+					force.add(particle.pm.force(cell.com));
 				continue;
 			}
 			// Split
@@ -259,16 +259,8 @@ void Tree::compute_forces(int base, int stride) {
 			}
 		}
 		particle.f = force;
-		particles[p] = particle;
-		// printf("\tfinal force %s\n", force.to_string().c_str());
-	}
-}
 
-void Tree::update_particles(int base, int stride) {
-	for(int p = base; p < N_PTS; p += stride) {
-		auto particle = particles[p];
-		if(particle.pm.m < 0)
-			continue;
+		// update particle
 		auto ax_dt = (particle.f.x / particle.pm.m) * DT;
 		auto ay_dt = (particle.f.y / particle.pm.m) * DT;
 		Point loc_new{particle.pm.p.x + (particle.v.x + 0.5 * ax_dt) * DT,
@@ -277,14 +269,18 @@ void Tree::update_particles(int base, int stride) {
 		particle.pm.p = loc_new;
 		particle.v = vel_new;
 
-		// handle lost particles
+		// handle lost particle
 		if(loc_new.x < 0 || loc_new.x > MAX_DIM || loc_new.y < 0 ||
 		   loc_new.y > MAX_DIM) {
 			printf("particle %d was lost\n", p);
 			particle.pm.m = -1;
 		}
-
 		particles[p] = particle;
+		// printf("\tfinal force %s\n", force.to_string().c_str());
+
+		if(send)
+			MPI_Send(&particles[p], sizeof(Particle), MPI_BYTE, 0, p,
+			         MPI_COMM_WORLD);
 	}
 }
 

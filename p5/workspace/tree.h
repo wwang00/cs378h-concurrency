@@ -56,8 +56,7 @@ struct Cell {
 class Tree {
 	std::vector<Cell> cells;
 
-	void compute_forces(int base, int stride);
-	void update_particles(int base, int stride);
+	void update_particles(int base, int stride, bool send = false);
 
 public:
 	std::vector<Particle> particles;
