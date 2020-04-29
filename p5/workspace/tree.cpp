@@ -79,13 +79,9 @@ Tree::Tree() { particles.resize(N_PTS); }
 void Tree::build() {
 	// printf("[%d] Tree::build called......\n", R);
 
-	int n_cells;
-	MPI_Bcast(&n_cells, sizeof(int), MPI_BYTE, 0, MPI_COMM_WORLD);
-	cells.resize(n_cells);
-	MPI_Bcast(&cells[0], cells.size() * sizeof(Cell), MPI_BYTE, 0,
-	          MPI_COMM_WORLD);
 	MPI_Bcast(&particles[0], N_PTS * sizeof(Particle), MPI_BYTE, 0,
 	          MPI_COMM_WORLD);
+	build_seq();
 
 	// printf("[%d] Tree::build exited......\n", R);
 }
@@ -103,14 +99,9 @@ void Tree::update() {
 void Tree::build_master() {
 	// printf("Tree::build_master called......\n");
 
-	build_seq();
-
-	int n_cells = cells.size();
-	MPI_Bcast(&n_cells, sizeof(int), MPI_BYTE, 0, MPI_COMM_WORLD);
-	MPI_Bcast(&cells[0], cells.size() * sizeof(Cell), MPI_BYTE, 0,
-	          MPI_COMM_WORLD);
 	MPI_Bcast(&particles[0], N_PTS * sizeof(Particle), MPI_BYTE, 0,
 	          MPI_COMM_WORLD);
+	build_seq();
 
 	// printf("Tree::build_master exited......\n");
 }
@@ -276,7 +267,7 @@ void Tree::update_particles(int base, int stride, bool send) {
 		// handle lost particle
 		if(loc_new.x < 0 || loc_new.x > MAX_DIM || loc_new.y < 0 ||
 		   loc_new.y > MAX_DIM) {
-			printf("particle %d was lost\n", p);
+			// printf("particle %d was lost\n", p);
 			particle.pm.m = -1;
 		}
 		particles[p] = particle;
