@@ -8,6 +8,6 @@ rm -f $OFILE
 cd workspace
 make all
 
-mpiexec -n 3 ./nbody -i $IFILE -o $OFILE -s 1000 -t 0.35 -d 0.005
+mpiexec -n 1 ./nbody -i $IFILE -o $OFILE -s 1000 -t 0.35 -d 0.005
 
 cd ..

@@ -74,7 +74,15 @@ Cell::Cell(Point loc, double dim, int parent)
     : state(Empty), parent(parent), child_base(-1), pid(-1), dim(dim), loc(loc),
       com(PointMass()) {}
 
-Tree::Tree() { particles.resize(N_PTS); }
+Tree::Tree() {
+	particles.resize(N_PTS);
+	if(M == 1) {
+		n_changed = N_PTS;
+	} else {
+		n_changed = N_PTS / (M - 1) + 1;
+	}
+	particles_changed = (Particle *)calloc(n_changed, sizeof(Particle));
+}
 
 void Tree::build() {
 	// printf("[%d] Tree::build called......\n", R);
@@ -91,7 +99,9 @@ void Tree::update() {
 
 	auto base = R - 1;
 	auto stride = M - 1;
-	update_particles(base, stride, true);
+	update_particles(base, stride);
+	MPI_Send(&particles_changed[0], n_changed * sizeof(Particle), MPI_BYTE, 0,
+	         0, MPI_COMM_WORLD);
 
 	// printf("[%d] Tree::update exited......\n", R);
 }
@@ -109,13 +119,16 @@ void Tree::build_master() {
 void Tree::update_master() {
 	// printf("[%d] Tree::update_master called......\n", R);
 
+	auto stride = M - 1;
 	MPI_Status status;
-	for(int i = 0; i < N_PTS; i++) {
-		Particle particle;
-		MPI_Recv(&particle, sizeof(Particle), MPI_BYTE, MPI_ANY_SOURCE,
-		         MPI_ANY_TAG, MPI_COMM_WORLD, &status);
-		auto p = status.MPI_TAG;
-		particles[p] = particle;
+	for(int r = 1; r < M; r++) {
+		MPI_Recv(&particles_changed[0], n_changed * sizeof(Particle), MPI_BYTE,
+		         MPI_ANY_SOURCE, MPI_ANY_TAG, MPI_COMM_WORLD, &status);
+		int base = status.MPI_SOURCE - 1;
+		int changed_idx = 0;
+		for(int p = base; p < N_PTS; p += stride) {
+			particles[p] = particles_changed[changed_idx++];
+		}
 	}
 
 	// printf("[%d] Tree::update_master exited......\n", R);
@@ -215,16 +228,15 @@ void Tree::update_seq() {
 	// printf("Tree::update_seq exited......\n");
 }
 
-void Tree::update_particles(int base, int stride, bool send) {
+void Tree::update_particles(int base, int stride) {
 	// compute forces
 	queue<int> q; // queue of cell ids
+	int changed_idx = 0;
 	for(int p = base; p < N_PTS; p += stride) {
 		// printf("particle %d\n", p);
 		auto particle = particles[p];
 		if(particle.pm.m < 0) {
-			if(send)
-				MPI_Send(&particles[p], sizeof(Particle), MPI_BYTE, 0, p,
-				         MPI_COMM_WORLD);
+			particles_changed[changed_idx++] = particle;
 			continue;
 		}
 
@@ -271,11 +283,7 @@ void Tree::update_particles(int base, int stride, bool send) {
 			particle.pm.m = -1;
 		}
 		particles[p] = particle;
-		// printf("\tfinal force %s\n", force.to_string().c_str());
-
-		if(send)
-			MPI_Send(&particles[p], sizeof(Particle), MPI_BYTE, 0, p,
-			         MPI_COMM_WORLD);
+		particles_changed[changed_idx++] = particle;
 	}
 }
 

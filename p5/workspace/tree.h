@@ -55,8 +55,10 @@ struct Cell {
 
 class Tree {
 	std::vector<Cell> cells;
+	Particle *particles_changed;
+	int n_changed;
 
-	void update_particles(int base, int stride, bool send = false);
+	void update_particles(int base, int stride);
 
 public:
 	std::vector<Particle> particles;
