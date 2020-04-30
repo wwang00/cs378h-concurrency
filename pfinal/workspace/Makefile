@@ -10,7 +10,7 @@ all : $(PROG)
 $(PROG) : $(OBJS)
 	$(CC) $(LDFLAGS) -o $(PROG) $(OBJS)
 
-%.o : %.cpp %.h
+%.o : %.cpp
 	$(CC) $(CXXFLAGS) -c $<
 
 .PHONY : clean

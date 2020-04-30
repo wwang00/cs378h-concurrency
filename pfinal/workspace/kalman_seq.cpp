@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,12 +11,27 @@ using namespace std;
 static constexpr int N = 2;
 static constexpr int N2 = N * N;
 
-static constexpr double DELTA = 0.0001;
+static constexpr double P0 = 100;
+static constexpr double DELTA = 0.00001;
 static constexpr double MU_INV = DELTA / (1 - DELTA);
-static constexpr double R = 0.001;
+static constexpr double R = 100;
+
+static constexpr double Z2_ENTRY = 4;
+static constexpr double Z2_EXIT = 0;
 
 static constexpr double ZEROS[N] = {0};
 static constexpr double ONES[N2] = {1, 0, 0, 1};
+
+/**
+ * result of kalman update
+ *
+ * y: innovation residual
+ * s: innovation covariance
+ */
+struct KalmanResult {
+	double y;
+	double s;
+};
 
 /**
  * perform one kalman update iteration
@@ -33,12 +49,12 @@ static constexpr double ONES[N2] = {1, 0, 0, 1};
  * x: current hidden state estimate
  * P: current covariance matrix estimate
  */
-void kalman_update(double *x, double *P, const double z, const double *H,
-                   const double *Q, const double R) {
-	printf("kalman_update called......\n");
-	printf("x: %.4lf, %.4lf\n", x[0], x[1]);
-	printf("z: %.4lf\n", z);
-	printf("H: %.4lf, %.4lf\n", H[0], H[1]);
+KalmanResult kalman_update(double *x, double *P, const double z,
+                           const double *H, const double *Q, const double R) {
+	// printf("kalman_update called......\n");
+	// printf("x: %.4lf, %.4lf\n", x[0], x[1]);
+	// printf("z: %.4lf\n", z);
+	// printf("H: %.4lf, %.4lf\n", H[0], H[1]);
 
 	/////////////
 	// predict //
@@ -52,8 +68,8 @@ void kalman_update(double *x, double *P, const double z, const double *H,
 	// state covariance prediction
 
 	double P_apriori[N2];
-	for(int i = 0; i < N; i++) {
-		for(int j = 0; j < N; j++) {
+	for(int j = 0; j < N; j++) {
+		for(int i = 0; i < N; i++) {
 			auto idx = i + j * N;
 			P_apriori[idx] = P[idx] + Q[idx];
 		}
@@ -65,8 +81,8 @@ void kalman_update(double *x, double *P, const double z, const double *H,
 
 	// innovation residual
 
-	double y = z - cblas_ddot(N, H, 1, x, 1);
-	printf("y: %.4lf\n", y);
+	double y = z - cblas_ddot(N, H, 1, x_apriori, 1);
+	// printf("y: %.4lf\n", y);
 
 	// innovation covariance
 
@@ -75,14 +91,14 @@ void kalman_update(double *x, double *P, const double z, const double *H,
 	cblas_dgemv(CblasColMajor, CblasNoTrans, N, N, 1, P_apriori, N, H, 1, 0,
 	            P_H, 1);
 	s = cblas_ddot(N, H, 1, P_H, 1) + R;
-	printf("s: %.4lf\n", s);
+	// printf("s: %.4lf\n", s);
 
 	// kalman gain
 
 	double K[N];
 	cblas_dgemv(CblasColMajor, CblasNoTrans, N, N, 1 / s, P_apriori, N, H, 1, 0,
 	            K, 1);
-	printf("K: %.4lf, %.4lf\n", K[0], K[1]);
+	// printf("K: %.4lf, %.4lf\n", K[0], K[1]);
 
 	////////////
 	// update //
@@ -101,27 +117,29 @@ void kalman_update(double *x, double *P, const double z, const double *H,
 	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, N, N, N, 1, diff, N,
 	            P_apriori, N, 0, P, N);
 
-	printf("kalman_update exited......\n");
+	// printf("kalman_update exited......\n");
+	return KalmanResult{y, s};
 }
 
 unordered_set<string> FLAGS{};
-unordered_set<string> OPTS{"-i"};
+unordered_set<string> OPTS{"-i", "-o", "-p"};
+
+int N_PTS;
 
 int main(int argc, char **argv) {
 	auto args = parse_args(argc, argv, FLAGS, OPTS);
 
+	N_PTS = stoi(args["-p"]);
 	auto ifile = fopen(args["-i"].c_str(), "r");
-
-	int n_pts;
-	fscanf(ifile, "%d", &n_pts);
+	auto ofile = fopen(args["-o"].c_str(), "w");
 
 	// read price series
 
-	auto z = (double *)calloc(n_pts, sizeof(double));
-	auto H = (double *)calloc(n_pts * N, sizeof(double));
-	for(int i = 0; i < n_pts; i++) {
+	auto z = (double *)calloc(N_PTS, sizeof(double));
+	auto H = (double *)calloc(N_PTS * N, sizeof(double));
+	for(int i = 0; i < N_PTS; i++) {
 		double x, y;
-		fscanf(ifile, "%lf,%lf", &x, &y);
+		fscanf(ifile, "%lf\t%lf", &x, &y);
 		H[i * N] = x;
 		H[i * N + 1] = 1;
 		z[i] = y;
@@ -133,15 +151,48 @@ int main(int argc, char **argv) {
 	auto P = (double *)calloc(N2, sizeof(double));
 	auto Q = (double *)calloc(N2, sizeof(double));
 	for(int i = 0; i < N; i++) {
+		P[i + i * N] = P0;
 		Q[i + i * N] = MU_INV;
 	}
 
-	for(int p = 0; p < n_pts; p++)
-		kalman_update(x, P, z[p], &H[p * N], Q, R);
+	int position = 0;
+	for(int p = 0; p < N_PTS; p++) {
+		auto result = kalman_update(x, P, z[p], &H[p * N], Q, R);
+		int sgn = result.y < 0 ? -1 : 1;
+		auto z2 = sgn * result.y * result.y / result.s;
+		// printf("z2 %.4lf\n", z2);
+		if(z2 < Z2_EXIT) {
+			if(position == -1) {
+				printf("BUY %d\n", p);
+				position = 0;
+			}
+		}
+		if(z2 < -Z2_ENTRY) {
+			if(position == 0) {
+				printf("BUY %d\n", p);
+				position = 1;
+			}
+		}
+		if(z2 > -Z2_EXIT) {
+			if(position == 1) {
+				printf("SEL %d\n", p);
+				position = 0;
+			}
+		}
+		if(z2 > Z2_ENTRY) {
+			if(position == 0) {
+				printf("SEL %d\n", p);
+				position = -1;
+			}
+		}
+		fprintf(ofile, "%.4lf\t%.4lf\n", result.y, result.s);
+	}
 
 	// print
 
 	printf("coefficient: %.4lf, intercept: %.4lf\n", x[0], x[1]);
+
+	fclose(ofile);
 
 	return 0;
 }

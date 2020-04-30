@@ -1,15 +1,16 @@
-from random import uniform
+import random
+import sys
 
-N = 100
+N = int(sys.argv[1])
+F = sys.argv[2]
+
 M = 2
 B = 50
-V = 20
-
-F = "input/input.txt"
+V = 10
 
 with open(F, "w") as ofile:
-    ofile.write(f"{N}\n")
     for _ in range(N):
-        x = uniform(1, 100)
-        y = M * x + B + uniform(-V, V)
-        ofile.write("%.2f,%.2f\n" % (x, y))
+        x = random.uniform(1, 100)
+        # y = random.uniform(1, 100)
+        y = M * x + B + random.gauss(0, V)
+        ofile.write("%.2f\t%.2f\n" % (x, y))
