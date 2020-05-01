@@ -15,13 +15,13 @@ make all
 for n in 100 200 300 400 500; do
     FILE=nb-$n
     IFILE=$FBASE/input/$FILE.txt
-    DFILE=$FBASE/data/$FILE.dat
+    DFILE=$FBASE/data/$FILE-p.dat
     touch $DFILE
     rm -f $DFILE
     touch $DFILE
     for i in {1..10}; do
         echo $n $i
-        mpiexec -n $n ./nbody -i $IFILE -o /dev/null -s 10000 -t 0.35 -d 0.005 >> $DFILE
+        mpiexec -n 4 ./nbody -i $IFILE -o /dev/null -s 10000 -t 0.35 -d 0.005 >> $DFILE
     done
 done
 
