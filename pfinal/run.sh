@@ -1,16 +1,18 @@
 #!/bin/bash
 
-N_PTS=1000
+N_PTS=1259
 
-IFILE=$PWD/input/input-$N_PTS.txt
-OFILE=$PWD/output/output-$N_PTS.txt
+S1=EWA
+S2=EWC
+
+IFILE1=$PWD/input/$S1-input.txt
+IFILE2=$PWD/input/$S2-input.txt
+OFILE=$PWD/output/$S1-$S2-output.txt
 rm -f $OFILE
-
-# python3 rng.py $N_PTS $IFILE
 
 cd workspace
 make all
 
-./kalman_seq -i $IFILE -o $OFILE -p $N_PTS
+./kalman_seq -i1 $IFILE1 -i2 $IFILE2 -o $OFILE -p $N_PTS
 
 cd ..

@@ -12,12 +12,12 @@ static constexpr int N = 2;
 static constexpr int N2 = N * N;
 
 static constexpr double P0 = 100;
-static constexpr double DELTA = 0.00001;
+static constexpr double DELTA = 0.0001;
 static constexpr double MU_INV = DELTA / (1 - DELTA);
-static constexpr double R = 100;
+static constexpr double R = 0.001;
 
-static constexpr double Z2_ENTRY = 4;
-static constexpr double Z2_EXIT = 0;
+static constexpr double Z2_ENTRY = 1;
+static constexpr double Z2_EXIT = 0.5;
 
 static constexpr double ZEROS[N] = {0};
 static constexpr double ONES[N2] = {1, 0, 0, 1};
@@ -122,16 +122,17 @@ KalmanResult kalman_update(double *x, double *P, const double z,
 }
 
 unordered_set<string> FLAGS{};
-unordered_set<string> OPTS{"-i", "-o", "-p"};
+unordered_set<string> OPTS{"-i1", "-i2", "-o", "-p"};
 
 int N_PTS;
 
 int main(int argc, char **argv) {
 	auto args = parse_args(argc, argv, FLAGS, OPTS);
 
-	N_PTS = stoi(args["-p"]);
-	auto ifile = fopen(args["-i"].c_str(), "r");
+	auto ifile1 = fopen(args["-i1"].c_str(), "r");
+	auto ifile2 = fopen(args["-i2"].c_str(), "r");
 	auto ofile = fopen(args["-o"].c_str(), "w");
+	N_PTS = stoi(args["-p"]);
 
 	// read price series
 
@@ -139,7 +140,8 @@ int main(int argc, char **argv) {
 	auto H = (double *)calloc(N_PTS * N, sizeof(double));
 	for(int i = 0; i < N_PTS; i++) {
 		double x, y;
-		fscanf(ifile, "%lf\t%lf", &x, &y);
+		fscanf(ifile1, "%lf", &x);
+		fscanf(ifile2, "%lf", &y);
 		H[i * N] = x;
 		H[i * N + 1] = 1;
 		z[i] = y;
@@ -156,42 +158,58 @@ int main(int argc, char **argv) {
 	}
 
 	int position = 0;
+    double last_price = 0;
+    double last_beta = 0;
+    double total_pnl = 0;
 	for(int p = 0; p < N_PTS; p++) {
 		auto result = kalman_update(x, P, z[p], &H[p * N], Q, R);
 		int sgn = result.y < 0 ? -1 : 1;
 		auto z2 = sgn * result.y * result.y / result.s;
 		// printf("z2 %.4lf\n", z2);
+        auto px = H[p & N];
+        auto py = z[p];
 		if(z2 < Z2_EXIT) {
 			if(position == -1) {
-				printf("BUY %d\n", p);
+                auto curr_price = py + px * last_beta;
+				printf("BUY %d curr: %.2lf\tlast: %.2lf\n", p, curr_price, last_price);
+                total_pnl += last_price - curr_price;
 				position = 0;
 			}
 		}
 		if(z2 < -Z2_ENTRY) {
 			if(position == 0) {
-				printf("BUY %d\n", p);
+				// printf("BUY %d\n", p);
+                last_beta = x[0];
+                last_price = py + px * last_beta;
 				position = 1;
 			}
 		}
 		if(z2 > -Z2_EXIT) {
 			if(position == 1) {
-				printf("SEL %d\n", p);
+                auto curr_price = py + px * last_beta;
+				printf("SEL %d curr: %.2lf\tlast: %.2lf\n", p, curr_price, last_price);
+                total_pnl += curr_price - last_price;
 				position = 0;
 			}
 		}
 		if(z2 > Z2_ENTRY) {
 			if(position == 0) {
-				printf("SEL %d\n", p);
+				// printf("SEL %d\n", p);
+                last_beta = x[0];
+                last_price = py + px * last_beta;
 				position = -1;
 			}
 		}
-		fprintf(ofile, "%.4lf\t%.4lf\n", result.y, result.s);
+		fprintf(ofile, "%.4lf\t%.4lf\t%.4lf\n", result.y, result.s, total_pnl);
 	}
 
 	// print
 
 	printf("coefficient: %.4lf, intercept: %.4lf\n", x[0], x[1]);
+    printf("total P&L: %.4lf\n", total_pnl);
 
+    fclose(ifile1);
+    fclose(ifile2);
 	fclose(ofile);
 
 	return 0;
