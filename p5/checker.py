@@ -1,19 +1,25 @@
 import matplotlib.pyplot as plt
 
 N = 10
-avgs = [0 for _ in range(17)]
+avgs = {}
+avgs_p = {}
 
 # average samples
-for n in range(1, 17):
-    with open(f"data/nb-100-{n}.dat", 'r') as ifile:
-        avgs[n] = 0
+for p in range(100, 501, 100):
+    with open(f"data/nb-{p}.dat", 'r') as ifile:
+        avgs[p] = 0
         for line in ifile:
-            avgs[n] += float(line)
-        avgs[n] /= N
+            avgs[p] += float(line)
+        avgs[p] /= N
+    with open(f"data/nb-{p}-p.dat", 'r') as ifile:
+        avgs_p[p] = 0
+        for line in ifile:
+            avgs_p[p] += float(line)
+        avgs_p[p] /= N
 
-X = [x for x in range(2, 17)]
-Y = [avgs[1] / avg for avg in avgs[2:]]
-plt.xlabel('procs')
+X = [x for x in range(100, 501, 100)]
+Y = [avgs[p] / avgs_p[p] for p in range(100, 501, 100)]
+plt.xlabel('points')
 plt.ylabel('speedup')
 plt.plot(X, Y, '-ro')
 plt.show()
