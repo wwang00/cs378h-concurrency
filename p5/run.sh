@@ -1,22 +1,27 @@
 #!/bin/bash
 
-FILE=nb-100
-IFILE=$PWD/input/$FILE.txt
-OFILE=$PWD/output/$FILE.out
-DFILE_BASE=$PWD/data/
+FBASE=$PWD
+FILE=nb-10
+IFILE=$FBASE/input/$FILE.txt
+OFILE=$FBASE/output/$FILE.out
 
 rm -f $OFILE
-#rm -f $DFILE_BASE/*
 
 cd workspace
 make all
 
-for n in {9..16}; do
-    DFILE=$DFILE_BASE/$FILE-$n.dat
+# mpiexec -n $1 ./nbody -i $IFILE -o $OFILE -s 1000 -t 0.35 -d 0.005
+
+for n in 100 200 300 400 500; do
+    FILE=nb-$n
+    IFILE=$FBASE/input/$FILE.txt
+    DFILE=$FBASE/data/$FILE.dat
+    touch $DFILE
+    rm -f $DFILE
     touch $DFILE
     for i in {1..10}; do
-	echo $n $i
-	mpiexec -n $n ./nbody -i $IFILE -o $OFILE -s 10000 -t 0.35 -d 0.005 >> $DFILE
+        echo $n $i
+        mpiexec -n $n ./nbody -i $IFILE -o /dev/null -s 10000 -t 0.35 -d 0.005 >> $DFILE
     done
 done
 

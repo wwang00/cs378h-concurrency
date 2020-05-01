@@ -12,7 +12,7 @@ for n in range(1, 17):
         avgs[n] /= N
 
 X = [x for x in range(2, 17)]
-Y = [avg / avgs[1] for avg in avgs[2:]]
+Y = [avgs[1] / avg for avg in avgs[2:]]
 plt.xlabel('procs')
 plt.ylabel('speedup')
 plt.plot(X, Y, '-ro')
