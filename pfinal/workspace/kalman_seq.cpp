@@ -12,13 +12,13 @@ static constexpr int N = 2;
 static constexpr int N2 = N * N;
 
 static constexpr double P0 = 10;
-static constexpr double DELTA = 0.00001;
-static constexpr double MU_INV = DELTA / (1 - DELTA);
+static constexpr double DELTA = 0.000001;
 static constexpr double R = 10;
 
-static constexpr int TRAINING = 300;
-static constexpr double Z2_ENTRY = 0.5;
-static constexpr double Z2_EXIT = 0.1;
+static constexpr int TRAINING = 250;
+static constexpr double ZSCORE_ENTRY = 1.0;
+static constexpr double ZSCORE_EXIT = 0.0;
+static constexpr double ZSCORE_DELTA = 1.0;
 
 static constexpr double ZEROS[N] = {0};
 static constexpr double ONES[N2] = {1, 0, 0, 1};
@@ -153,16 +153,18 @@ int main(int argc, char **argv) {
 	auto x = (double *)calloc(N, sizeof(double));
 	auto P = (double *)calloc(N2, sizeof(double));
 	auto Q = (double *)calloc(N2, sizeof(double));
+	auto q = DELTA / (1 - DELTA);
 	for(int i = 0; i < N; i++) {
 		P[i + i * N] = P0;
-		Q[i + i * N] = MU_INV;
+		Q[i + i * N] = q;
 	}
 
 	int position = 0;
-	double last_beta = 0;
-	double last_port = 0;
+	double exit_zscore;
+	double last_beta;
+	double last_port;
 	double total_pnl = 0;
-    double final_pnl;
+	int total_trades = 0;
 	for(int p = 0; p < N_PTS; p++) {
 		auto px = H[p * N];
 		auto py = z[p];
@@ -171,46 +173,50 @@ int main(int argc, char **argv) {
 		auto result = kalman_update(x, P, z[p], &H[p * N], Q, R);
 		if(p < TRAINING)
 			continue;
-		int sgn = result.y < 0 ? -1 : 1;
-		auto z2 = sgn * result.y * result.y / (result.s - R);
-		// printf("z2 %.4lf\n", z2);
+        int sgn = result.y < 0 ? -1 : 1;
+		auto zscore = sgn * result.y * result.y / (result.s - R);
+		// printf("zscore %.4lf\n", zscore);
 
-		if(z2 < -Z2_ENTRY && position == 0) {
+		if(zscore < -ZSCORE_ENTRY && position == 0) {
+			exit_zscore = zscore + ZSCORE_DELTA;
 			last_beta = beta;
 			last_port = py - px * beta;
 			printf("BUY-I\t%d\tcurr: %.2lf\n", p, last_port);
+			total_trades++;
 			position = 1;
 		}
-		if(z2 > -Z2_EXIT && position == 1) {
+		if(zscore > exit_zscore && position == 1) {
 			auto port = py - px * last_beta;
 			printf("SEL-O\t%d\tcurr: %.2lf\tprev: %.2lf\n", p, port, last_port);
 			total_pnl += port - last_port;
+			total_trades++;
 			position = 0;
 		}
-		if(z2 > Z2_ENTRY && position == 0) {
+		if(zscore > ZSCORE_ENTRY && position == 0) {
+			exit_zscore = zscore - ZSCORE_DELTA;
 			last_beta = beta;
 			last_port = py - px * beta;
 			printf("SEL-I\t%d\tcurr: %.2lf\n", p, last_port);
+			total_trades++;
 			position = -1;
 		}
-		if(z2 < Z2_EXIT && position == -1) {
+		if(zscore < exit_zscore && position == -1) {
 			auto port = py - px * last_beta;
 			printf("BUY-O\t%d\tcurr: %.2lf\tprev: %.2lf\n", p, port, last_port);
 			total_pnl += last_port - port;
+			total_trades++;
 			position = 0;
 		}
 
-        if(p == 1200) {
-            final_pnl = total_pnl;
-        }
 		fprintf(ofile, "%.4lf\t%.4lf\t%.4lf\t%.4lf\t%.4lf\n", beta, intc,
 		        result.y, result.s, total_pnl);
 	}
 
 	// print
 
+	printf("trades: %d\n", total_trades);
 	printf("coefficient: %.4lf, intercept: %.4lf\n", x[0], x[1]);
-	printf("total P&L: %.4lf\n", final_pnl);
+	printf("total P&L: %.4lf\n", total_pnl);
 
 	fclose(ifile1);
 	fclose(ifile2);

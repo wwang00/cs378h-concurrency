@@ -1,5 +1,7 @@
-IF='/Users/william/Downloads/EWC.csv'
-OF='/Users/william/cs378h-concurrency/pfinal/input/EWC.txt'
+SYMB = 'EWC'
+
+IF = f"/Users/william/Downloads/{SYMB}-2.csv"
+OF = f"/Users/william/cs378h-concurrency/pfinal/input/{SYMB}-input.txt"
 
 with open(IF, 'r') as ifile:
     with open(OF, 'w') as ofile:

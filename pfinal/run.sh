@@ -1,6 +1,6 @@
 #!/bin/bash
 
-N_PTS=1259
+N_PTS=1250
 
 S1=EWA
 S2=EWC
