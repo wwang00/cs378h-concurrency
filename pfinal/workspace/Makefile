@@ -4,7 +4,7 @@ CC = g++
 CXXFLAGS = -std=c++11 -O3
 LDFLAGS = -lcblas
 NVCC = nvcc -arch=sm_61
-OBJS = argparse.o
+OBJS = argparse.o kalman.o
 
 all : $(TGTS)
 

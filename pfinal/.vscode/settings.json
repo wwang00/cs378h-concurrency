@@ -1,0 +1,17 @@
+{
+    "files.associations": {
+        "*.cu": "cpp",
+        "__tree": "cpp",
+        "algorithm": "cpp",
+        "array": "cpp",
+        "bitset": "cpp",
+        "iterator": "cpp",
+        "memory": "cpp",
+        "numeric": "cpp",
+        "ratio": "cpp",
+        "utility": "cpp",
+        "*.tcc": "cpp",
+        "random": "cpp",
+        "chrono": "cpp"
+    }
+}

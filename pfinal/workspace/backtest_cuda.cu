@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "argparse.h"
+#include "kalman.h"
 
 #define DEBUG
 
@@ -19,13 +20,21 @@ vector<vector<double>> raw_price_data;
 
 __device__ void kalman(double *d_price_data, double *d_output, int stonks,
                        int days) {
-	for(int i = 0; i < days; i++) {
-		for(int j = 0; j < stonks; j++) {
-			int off = i * stonks + j;
-			d_output[off] = d_price_data[off] < 3;
+	int N = stonks;
+	int N2 = N * N;
+
+	double x[N];
+	double P[N2];
+	for(int j = 0; j < N; j++) {
+		x[j] = 0;
+		for(int i = 0; i < N; i++) {
+			P[i + j * N] = i == j ? P0 : 0;
 		}
 	}
-	return;
+	auto Q = DELTA / (1 - DELTA);
+
+	kalman_update(stonks, days, x, P, d_price_data[0], d_price_data, Q);
+    d_output[0] = 777;
 }
 
 __global__ void ExecuteStrategy(double *d_output, double *d_shuffled_dataset,
