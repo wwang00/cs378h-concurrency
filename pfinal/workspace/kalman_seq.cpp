@@ -10,8 +10,8 @@
 
 using namespace std;
 
-static constexpr int N = 2;
-static constexpr int N2 = N * N;
+int N, N2;
+int days;
 
 static constexpr double P0 = 10;
 static constexpr double DELTA = 0.000001;
@@ -23,8 +23,9 @@ static constexpr double ZSCORE_ENTRY = 1.0;
 static constexpr double ZSCORE_EXIT = 0.0;
 static constexpr double ZSCORE_DELTA = 1.0;
 
-static constexpr double ZEROS[N] = {0};
-static constexpr double ONES[N2] = {1, 0, 0, 1};
+// TODO generalize
+static constexpr double ZEROS[2] = {0};
+static constexpr double ONES[4] = {1, 0, 0, 1};
 
 /**
  * result of kalman update
@@ -119,14 +120,13 @@ KalmanResult kalman_update(double *x, double *P, const double z,
 unordered_set<string> FLAGS{};
 unordered_set<string> OPTS{"-i", "-o"};
 
-int days;
-
 int main(int argc, char **argv) {
 	auto args = parse_args(argc, argv, FLAGS, OPTS);
 
 	auto ifile = fopen(args["-i"].c_str(), "r");
 	auto ofile = fopen(args["-o"].c_str(), "w");
-    fscanf(ifile, "%d", &days);
+	fscanf(ifile, "%d %d", &N, &days);
+	N2 = N * N;
 
 	// read price series
 
@@ -216,7 +216,7 @@ int main(int argc, char **argv) {
 	printf("trades: %d\n", total_trades);
 	printf("coefficient: %.4lf, intercept: %.4lf\n", x[0], x[1]);
 	printf("total P&L: %.4lf\n", total_pnl);
-    // printf("%.4lf\n", total_pnl);
+	// printf("%.4lf\n", total_pnl);
 
 	fclose(ifile);
 	fclose(ofile);

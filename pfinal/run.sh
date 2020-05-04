@@ -7,7 +7,7 @@ OFILE=$PWD/output/$DATA-output.txt
 rm -f $OFILE
 
 cd workspace
-make all
+make kalman_seq
 
 ./kalman_seq -i $IFILE -o $OFILE
 

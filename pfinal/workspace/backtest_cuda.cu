@@ -34,7 +34,7 @@ __global__ void ExecuteStrategy(double *d_output, double *d_shuffled_dataset,
 	int test_id = blockDim.x * blockIdx.x + threadIdx.x;
 	if(test_id >= tests)
 		return;
-	
+
 	// flat array
 	int base = test_id * stonks * days;
 	kalman(&d_shuffled_dataset[base], &d_output[base], stonks, days);
@@ -48,10 +48,10 @@ void load_data(string filename) {
 	// load data
 	ifstream fin(filename);
 	fin >> stonks >> days;
-	
+
 	// size of all data
 	data_bytes = stonks * days * tests * sizeof(double);
-	
+
 	raw_price_data.resize(days, vector<double>(stonks));
 	vector<double> last_prices(stonks);
 	for(int i = 0; i < days; i++) {
@@ -66,7 +66,8 @@ void load_data(string filename) {
 			last_prices[j] = price;
 		}
 	}
-	
+	fin.close();
+
 #ifdef DEBUG
 	for(int i = 0; i < days; i++) {
 		for(int j = 0; j < stonks; j++) {
@@ -86,7 +87,7 @@ void gen_data() {
 	for(int t = 0; t < tests; t++) {
 		// shuffle whole day arrays
 		random_shuffle(++raw_price_data.begin(), raw_price_data.end());
-		
+
 		// copy shuffled arrays into 1D array
 		for(int i = 0; i < days; i++) {
 			int off = stonks * (t * days + i);
@@ -107,32 +108,32 @@ void gen_data() {
 			printf("\n");
 		}
 	}
-	
+
 	printf("gen_data exited......\n");
 #endif
 }
 
 void backtest() {
 	printf("backtest called......\n");
-	
+
 	// copy to device
 	cudaMalloc(&d_shuffled_dataset, data_bytes);
 	cudaMemcpy(d_shuffled_dataset, h_shuffled_dataset, data_bytes,
 	           cudaMemcpyHostToDevice);
-	
+
 	// output array
 	h_output = (double *)malloc(data_bytes);
 	cudaMalloc(&d_output, data_bytes);
-	
+
 	// execute strategy
 	int grid_dim = (tests + BLOCK_DIM - 1) / BLOCK_DIM;
 	ExecuteStrategy<<<grid_dim, BLOCK_DIM>>>(d_output, d_shuffled_dataset,
 	                                         tests, stonks, days);
 	cudaDeviceSynchronize();
-	
+
 	// device -> host
 	cudaMemcpy(h_output, d_output, data_bytes, cudaMemcpyDeviceToHost);
-	
+
 	// print trades
 	printf("trades\n");
 	for(int t = 0; t < tests; t++) {
@@ -147,9 +148,9 @@ void backtest() {
 			printf("\n");
 		}
 	}
-	
+
 	printf("backtest exited......\n");
-	
+
 	return;
 }
 
@@ -160,10 +161,10 @@ int main(int argc, char **argv) {
 	auto args = parse_args(argc, argv, FLAGS, OPTS);
 	auto filename = args["-i"];
 	tests = stoi(args["-t"]);
-	
+
 	load_data(filename);
 	gen_data();
 	backtest();
-	
+
 	return 0;
 }
