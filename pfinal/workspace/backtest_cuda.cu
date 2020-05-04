@@ -15,17 +15,34 @@ using namespace std;
 
 int stonks, days, tests, data_bytes;
 
-double *h_price_data, *h_shuffled_dataset, *h_output;
-double *d_price_data, *d_shuffled_dataset, *d_output;
+double *h_prices, *h_pnl;
+double *d_prices, *d_pnl;
+double *scratch; // workspace for cuda routine
+
 // first entry: initial prices
 // following entries: changes in prices
 vector<vector<double>> raw_price_data;
 
 __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x, double *P,
-                                           const double *prices) {
+                                           const double *prices, double *scratch) {
 	auto N2 = N * N;
 	auto Q = DELTA / (1 - DELTA);
 	auto z = prices[obs];
+	auto H = scratch + 0;
+	int i_H = 0;
+	for(int i = 0; i < N; i++) {
+		if(i == obs)
+			continue;
+		H[i_H] = prices[i];
+		i_H++;
+	}
+	H[i_H] = 1;
+
+    printf("H\n");
+    for(int i = 0; i < N; i++) {
+        printf("%.2lf ", H[i]);
+    }
+    printf("\n");
 
 	/////////////
 	// predict //
@@ -35,10 +52,15 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
 
 	auto x_apriori = x;
 
+    printf("x_apriori\n");
+    for(int i = 0; i < N; i++) {
+        printf("%.2lf ", x_apriori[i]);
+    }
+    printf("\n");
+
 	// state covariance prediction
 
-	double *P_apriori;
-	cudaMalloc(&P_apriori, N2 * sizeof(double));
+	auto P_apriori = H + N;
 	for(int j = 0; j < N; j++) {
 		for(int i = 0; i < N; i++) {
 			auto idx = i + j * N;
@@ -48,6 +70,14 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
 		}
 	}
 
+	printf("P_apriori\n");
+	for(int i = 0; i < N; i++) {
+		for(int j = 0; j < N; j++) {
+			printf("%.2lf ", P_apriori[i + j * N]);
+		}
+		printf("\n");
+	}
+
 	///////////////
 	// calculate //
 	///////////////
@@ -55,37 +85,42 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
 	// innovation residual
 
 	double y = z;
-	int i_x = 0;
-    for(int i_p = 0; i_p < N; i_p++) {
-	    if(i_p == obs) {
-		    y -= x_apriori[N - 1];
-	    } else {
-		    y -= prices[i_p] * x_apriori[i_x];
-		    i_x++;
-	    }
+    for(int i = 0; i < N; i++) {
+	    y -= H[i] * x_apriori[i];
     }
+
+	printf("y %.2lf\n", y);
+	printf("z %.2lf\n", z);
 
 	// innovation covariance
 
 	double s = R;
-	double *P_H;
-    cudaMalloc(&P_H, N * sizeof(double));
-    for(int j = 0; j < N; j++) {
-	    for(int i = 0; i < N; i++) {
-		    P_H[i] += H[i] * P_apriori[i + j * N];
+	auto P_H = P_apriori + N2;
+    for(int i = 0; i < N; i++) {
+	    double dot = 0;
+	    for(int j = 0; j < N; j++) {
+		    dot += P_apriori[i + j * N] * H[j];
 	    }
+	    P_H[i] = dot;
     }
     for(int i = 0; i < N; i++) {
 	    s += H[i] * P_H[i];
     }
 
+	printf("s %.2lf\n", s);
+
     // kalman gain
 
-    double *K;
-    cudaMalloc(&K, N * sizeof(double));
+    auto K = P_H + N;
     for(int i = 0; i < N; i++) {
 	    K[i] = P_H[i] / s;
     }
+
+	printf("K\n");
+	for(int i = 0; i < N; i++) {
+		printf("%.2lf ", K[i]);
+	}
+	printf("\n");
 
 	////////////
 	// update //
@@ -99,8 +134,7 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
 
     // covariance update
 
-    double *diff;
-    cudaMalloc(&diff, N2 * sizeof(double));
+    auto diff = K + N;
 	for(int j = 0; j < N; j++) {
 		for(int i = 0; i < N; i++) {
 			diff[i + j * N] = (i == j ? 1 : 0) - K[i] * H[j];
@@ -116,16 +150,17 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
 		}
 	}
 
+	printf("\n");
 	return KalmanResult{y, s};
 }
 
-__device__ void kalman_cuda(int N, int days, const double *prices, double *pnl) {
+__device__ void kalman_cuda(int N, int days, const double *prices, double *pnl, double *scratch) {
+	printf("kalman_cuda called......\n");
+
 	auto N2 = N * N;
 
-	double *x;
-	cudaMalloc(&x, N * sizeof(double));
-	double *P;
-	cudaMalloc(&x, N2 * sizeof(double));
+	auto *x = scratch + 0;
+	auto *P = x + N;
 	for(int j = 0; j < N; j++) {
 		x[j] = 0;
 		for(int i = 0; i < N; i++) {
@@ -144,7 +179,7 @@ __device__ void kalman_cuda(int N, int days, const double *prices, double *pnl) 
 		auto py = prices[d * N + 1];
 		auto beta = x[0];
 		auto intc = x[1];
-		auto result = kalman_cuda_update(N, 1, x, P, prices);
+		auto result = kalman_cuda_update(N, 1, x, P, &prices[d * N], P + N2);
 		if(d < TRAINING_DAYS) {
 			pnl[d] = 0;
 			continue;
@@ -181,19 +216,16 @@ __device__ void kalman_cuda(int N, int days, const double *prices, double *pnl) 
 
 		pnl[d] = total_pnl;
 	}
+	printf("kalman_cuda exited......\n");
 }
 
-__global__ void ExecuteStrategy(double *d_output, double *d_shuffled_dataset,
-                                int tests, int stonks, int days) {
-	// check bounds
-	int test_id = blockDim.x * blockIdx.x + threadIdx.x;
-	if(test_id >= tests)
-		return;
+__global__ void ExecuteStrategy(int N, int days, double *prices, double *pnl, double *scratch) {
+	printf("ExecuteStrategy called......\n");
 
-	// flat array
-	int base = test_id * stonks * days;
-	kalman_cuda(stonks, days, &d_shuffled_dataset[base], &d_output[base]);
-	return;
+	// TODO loop through tests
+	kalman_cuda(N, days, prices, pnl, scratch);
+
+	printf("ExecuteStrategy exited......\n");
 }
 
 void load_data(string filename) {
@@ -238,20 +270,20 @@ void gen_data() {
 #ifdef DEBUG
 	printf("gen_data called......\n");
 #endif
-	h_shuffled_dataset = (double *)malloc(data_bytes);
+	h_prices = (double *)malloc(data_bytes);
 	for(int t = 0; t < tests; t++) {
 		// shuffle whole day arrays
-		random_shuffle(++raw_price_data.begin(), raw_price_data.end());
+		//random_shuffle(++raw_price_data.begin(), raw_price_data.end());
 
 		// copy and accumulate shuffled arrays
 		for(int i = 0; i < days; i++) {
 			int off = stonks * (t * days + i);
 			for(int j = 0; j < stonks; j++) {
 				if(i == 0) {
-					h_shuffled_dataset[off + j] = raw_price_data[i][j];
+					h_prices[off + j] = raw_price_data[i][j];
 				} else {
-					h_shuffled_dataset[off + j] =
-					    raw_price_data[i][j] + h_shuffled_dataset[off - stonks + j];
+					h_prices[off + j] =
+					    raw_price_data[i][j] + h_prices[off - stonks + j];
 				}
 			}
 		}
@@ -264,7 +296,7 @@ void gen_data() {
 			int off = stonks * (t * days + i);
 			printf("\t\t");
 			for(int j = 0; j < stonks; j++) {
-				printf("%.4lf\t", h_shuffled_dataset[off + j]);
+				printf("%.4lf\t", h_prices[off + j]);
 			}
 			printf("\n");
 		}
@@ -278,39 +310,26 @@ void backtest() {
 	printf("backtest called......\n");
 
 	// copy to device
-	cudaMalloc(&d_shuffled_dataset, data_bytes);
-	cudaMemcpy(d_shuffled_dataset, h_shuffled_dataset, data_bytes,
+	cudaMalloc(&d_prices, data_bytes);
+	cudaMemcpy(d_prices, h_prices, data_bytes,
 	           cudaMemcpyHostToDevice);
 
 	// output array
-	h_output = (double *)malloc(data_bytes);
-	cudaMalloc(&d_output, data_bytes);
+	h_pnl = (double *)malloc(days * sizeof(double));
+	cudaMalloc(&d_pnl, days * sizeof(double));
+
+	cudaMalloc(&scratch, (3 * stonks * stonks + 4 * stonks) * sizeof(double));
 
 	// execute strategy
-	ExecuteStrategy<<<GRID_DIM, BLOCK_DIM>>>(d_output, d_shuffled_dataset,
-	                                         tests, stonks, days);
+	ExecuteStrategy<<<GRID_DIM, BLOCK_DIM>>>(stonks, days, d_prices, d_pnl, scratch);
 	cudaDeviceSynchronize();
 
 	// device -> host
-	cudaMemcpy(h_output, d_output, data_bytes, cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_pnl, d_pnl, days * sizeof(double), cudaMemcpyDeviceToHost);
 
-	// print trades
-	printf("trades\n");
-	for(int t = 0; t < tests; t++) {
-		printf("test %d\n", t);
-		for(int i = 0; i < days; i++) {
-			printf("\tday %d\n", i);
-			int off = stonks * (t * days + i);
-			printf("\t\t");
-			for(int j = 0; j < stonks; j++) {
-				printf("%.4lf\t", h_output[off + j]);
-			}
-			printf("\n");
-		}
-	}
+	printf("total P&L: %.4lf\n", h_pnl[days - 1]);
 
 	printf("backtest exited......\n");
-
 	return;
 }
 
