@@ -10,21 +10,24 @@
 
 using namespace std;
 
-#define BLOCK_DIM 32
+#define GRID_DIM 1
+#define BLOCK_DIM 1
 
 int stonks, days, tests, data_bytes;
 
 double *h_price_data, *h_shuffled_dataset, *h_output;
 double *d_price_data, *d_shuffled_dataset, *d_output;
+// first entry: initial prices
+// following entries: changes in prices
 vector<vector<double>> raw_price_data;
 
-__device__ void kalman(double *d_price_data, double *d_output, double *d_x,
-                       double *d_P, int stonks, int days) {
-	int N = stonks;
-	int N2 = N * N;
-	auto x = d_x;
-	auto P = d_P;
+__device__ void kalman(int N, int days, const double *prices, double *pnl) {
+	auto N2 = N * N;
 
+	double *x;
+	cudaMalloc(&x, N * sizeof(double));
+	double *P;
+	cudaMalloc(&x, N2 * sizeof(double));
 	for(int j = 0; j < N; j++) {
 		x[j] = 0;
 		for(int i = 0; i < N; i++) {
@@ -33,13 +36,58 @@ __device__ void kalman(double *d_price_data, double *d_output, double *d_x,
 	}
 	auto Q = DELTA / (1 - DELTA);
 
-	kalman_update(stonks, days, x, P, d_price_data[0], d_price_data, Q);
-	d_output[0] = 777;
+	int position = 0;
+	double exit_zscore;
+	double last_beta;
+	double last_port;
+	double total_pnl = 0;
+	int total_trades = 0;
+	for(int d = 0; d < days; d++) {
+		auto px = prices[d * N];
+		auto py = prices[d * N + 1];
+		auto beta = x[0];
+		auto intc = x[1];
+		auto result = kalman_cuda_update(N, x, P, prices);
+		if(d < TRAINING_DAYS) {
+			pnl[d] = 0;
+			continue;
+		}
+		int sgn = result.y < 0 ? -1 : 1;
+		auto zscore = sgn * result.y * result.y / (result.s - R);
+
+		if(zscore < -ZSCORE_ENTRY && position == 0) {
+			exit_zscore = zscore + ZSCORE_DELTA;
+			last_beta = beta;
+			last_port = py - px * beta;
+			total_trades++;
+			position = 1;
+		}
+		if(zscore > exit_zscore && position == 1) {
+			auto port = py - px * last_beta;
+			total_pnl += port - last_port;
+			total_trades++;
+			position = 0;
+		}
+		if(zscore > ZSCORE_ENTRY && position == 0) {
+			exit_zscore = zscore - ZSCORE_DELTA;
+			last_beta = beta;
+			last_port = py - px * beta;
+			total_trades++;
+			position = -1;
+		}
+		if(zscore < exit_zscore && position == -1) {
+			auto port = py - px * last_beta;
+			total_pnl += last_port - port;
+			total_trades++;
+			position = 0;
+		}
+
+		pnl[d] = total_pnl;
+	}
 }
 
 __global__ void ExecuteStrategy(double *d_output, double *d_shuffled_dataset,
-                                int tests, double *d_x, double *d_P, int stonks,
-                                int days) {
+                                int tests, int stonks, int days) {
 	// check bounds
 	int test_id = blockDim.x * blockIdx.x + threadIdx.x;
 	if(test_id >= tests)
@@ -47,7 +95,7 @@ __global__ void ExecuteStrategy(double *d_output, double *d_shuffled_dataset,
 
 	// flat array
 	int base = test_id * stonks * days;
-	kalman(&d_shuffled_dataset[base], &d_output[base], d_x, d_P, stonks, days);
+	kalman(stonks, days, &d_shuffled_dataset[base], &d_output[base]);
 	return;
 }
 
@@ -98,11 +146,17 @@ void gen_data() {
 		// shuffle whole day arrays
 		random_shuffle(++raw_price_data.begin(), raw_price_data.end());
 
-		// copy shuffled arrays into 1D array
+		// copy and accumulate shuffled arrays
 		for(int i = 0; i < days; i++) {
 			int off = stonks * (t * days + i);
-			memcpy(&h_shuffled_dataset[off], &raw_price_data[i][0],
-			       stonks * sizeof(double));
+			for(int j = 0; j < stonks; j++) {
+				if(i == 0) {
+					h_shuffled_dataset[off + j] = raw_price_data[i][j];
+				} else {
+					h_shuffled_dataset[off + j] =
+					    raw_price_data[i][j] + raw_price_data[i - 1][j];
+				}
+			}
 		}
 	}
 #ifdef DEBUG
@@ -135,16 +189,9 @@ void backtest() {
 	h_output = (double *)malloc(data_bytes);
 	cudaMalloc(&d_output, data_bytes);
 
-	// workspaces for kalman kernel
-	double *d_x;
-	double *d_P;
-	cudaMalloc(d_x, stonks * sizeof(double));
-	cudaMalloc(d_P, stonks * stonks * sizeof(double));
-
 	// execute strategy
-	int grid_dim = (tests + BLOCK_DIM - 1) / BLOCK_DIM;
-	ExecuteStrategy<<<grid_dim, BLOCK_DIM>>>(d_output, d_shuffled_dataset,
-	                                         tests, d_x, d_P, stonks, days);
+	ExecuteStrategy<<<GRID_DIM, BLOCK_DIM>>>(d_output, d_shuffled_dataset,
+	                                         tests, stonks, days);
 	cudaDeviceSynchronize();
 
 	// device -> host

@@ -6,22 +6,6 @@
 #include "cblas.h"
 #include "kalman.h"
 
-/**
- * perform one kalman update iteration
- *
- * <params>
- * n: dimension of observation model
- * x: previous hidden state estimate
- * P: previous covariance matrix estimate
- * z: current observable variable observation
- * H: current observation matrix
- * Q: process noise covariance matrix
- * R: observation noise covariance matrix
- *
- * <effects>
- * x: current hidden state estimate
- * P: current covariance matrix estimate
- */
 KalmanResult kalman_update(int stonks, int days, double *x, double *P,
                            const double z, const double *H, const double Q) {
 	int N = stonks;

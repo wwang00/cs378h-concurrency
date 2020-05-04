@@ -66,17 +66,11 @@ int main(int argc, char **argv) {
 			exit_zscore = zscore + ZSCORE_DELTA;
 			last_beta = beta;
 			last_port = py - px * beta;
-#ifdef DEBUG
-			printf("BUY-I\t%d\tcurr: %.2lf\n", d, last_port);
-#endif
 			total_trades++;
 			position = 1;
 		}
 		if(zscore > exit_zscore && position == 1) {
 			auto port = py - px * last_beta;
-#ifdef DEBUG
-			printf("SEL-O\t%d\tcurr: %.2lf\tprev: %.2lf\n", d, port, last_port);
-#endif
 			total_pnl += port - last_port;
 			total_trades++;
 			position = 0;
@@ -85,17 +79,11 @@ int main(int argc, char **argv) {
 			exit_zscore = zscore - ZSCORE_DELTA;
 			last_beta = beta;
 			last_port = py - px * beta;
-#ifdef DEBUG
-			printf("SEL-I\t%d\tcurr: %.2lf\n", d, last_port);
-#endif
 			total_trades++;
 			position = -1;
 		}
 		if(zscore < exit_zscore && position == -1) {
 			auto port = py - px * last_beta;
-#ifdef DEBUG
-			printf("BUY-O\t%d\tcurr: %.2lf\tprev: %.2lf\n", d, port, last_port);
-#endif
 			total_pnl += last_port - port;
 			total_trades++;
 			position = 0;
