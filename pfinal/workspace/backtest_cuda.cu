@@ -18,13 +18,13 @@ double *h_price_data, *h_shuffled_dataset, *h_output;
 double *d_price_data, *d_shuffled_dataset, *d_output;
 vector<vector<double>> raw_price_data;
 
-__device__ void kalman(double *d_price_data, double *d_output, int stonks,
-                       int days) {
+__device__ void kalman(double *d_price_data, double *d_output, double *d_x,
+                       double *d_P, int stonks, int days) {
 	int N = stonks;
 	int N2 = N * N;
+	auto x = d_x;
+	auto P = d_P;
 
-	double x[N];
-	double P[N2];
 	for(int j = 0; j < N; j++) {
 		x[j] = 0;
 		for(int i = 0; i < N; i++) {
@@ -34,11 +34,12 @@ __device__ void kalman(double *d_price_data, double *d_output, int stonks,
 	auto Q = DELTA / (1 - DELTA);
 
 	kalman_update(stonks, days, x, P, d_price_data[0], d_price_data, Q);
-    d_output[0] = 777;
+	d_output[0] = 777;
 }
 
 __global__ void ExecuteStrategy(double *d_output, double *d_shuffled_dataset,
-                                int tests, int stonks, int days) {
+                                int tests, double *d_x, double *d_P, int stonks,
+                                int days) {
 	// check bounds
 	int test_id = blockDim.x * blockIdx.x + threadIdx.x;
 	if(test_id >= tests)
@@ -46,7 +47,7 @@ __global__ void ExecuteStrategy(double *d_output, double *d_shuffled_dataset,
 
 	// flat array
 	int base = test_id * stonks * days;
-	kalman(&d_shuffled_dataset[base], &d_output[base], stonks, days);
+	kalman(&d_shuffled_dataset[base], &d_output[base], d_x, d_P, stonks, days);
 	return;
 }
 
@@ -134,10 +135,16 @@ void backtest() {
 	h_output = (double *)malloc(data_bytes);
 	cudaMalloc(&d_output, data_bytes);
 
+	// workspaces for kalman kernel
+	double *d_x;
+	double *d_P;
+	cudaMalloc(d_x, stonks * sizeof(double));
+	cudaMalloc(d_P, stonks * stonks * sizeof(double));
+
 	// execute strategy
 	int grid_dim = (tests + BLOCK_DIM - 1) / BLOCK_DIM;
 	ExecuteStrategy<<<grid_dim, BLOCK_DIM>>>(d_output, d_shuffled_dataset,
-	                                         tests, stonks, days);
+	                                         tests, d_x, d_P, stonks, days);
 	cudaDeviceSynchronize();
 
 	// device -> host
