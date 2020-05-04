@@ -1,6 +1,6 @@
 #include <algorithm>
 #include <fstream>
-#include <iostream>
+#include <stdio.h>
 #include <vector>
 
 #include "argparse.h"
@@ -34,7 +34,7 @@ __global__ void ExecuteStrategy(double *d_output, double *d_shuffled_dataset,
 	int test_id = blockDim.x * blockIdx.x + threadIdx.x;
 	if(test_id >= tests)
 		return;
-
+	
 	// flat array
 	int base = test_id * stonks * days;
 	kalman(&d_shuffled_dataset[base], &d_output[base], stonks, days);
@@ -42,14 +42,18 @@ __global__ void ExecuteStrategy(double *d_output, double *d_shuffled_dataset,
 }
 
 void load_data(string filename) {
+#ifdef DEBUG
+	printf("load_data called......\n");
+#endif
 	// load data
 	ifstream fin(filename);
 	fin >> stonks >> days;
-
+	
 	// size of all data
 	data_bytes = stonks * days * tests * sizeof(double);
-
+	
 	raw_price_data.resize(days, vector<double>(stonks));
+	vector<double> last_prices(stonks);
 	for(int i = 0; i < days; i++) {
 		for(int j = 0; j < stonks; j++) {
 			double price;
@@ -57,80 +61,95 @@ void load_data(string filename) {
 			if(i == 0) {
 				raw_price_data[i][j] = price;
 			} else {
-				raw_price_data[i][j] = price - raw_price_data[i - 1][j];
+				raw_price_data[i][j] = price - last_prices[j];
 			}
+			last_prices[j] = price;
 		}
 	}
-
+	
 #ifdef DEBUG
 	for(int i = 0; i < days; i++) {
 		for(int j = 0; j < stonks; j++) {
-			cout << raw_price_data[i][j] << " ";
+			printf("%.4lf\t", raw_price_data[i][j]);
 		}
-		cout << endl;
+		printf("\n");
 	}
+	printf("load_data exited......\n");
 #endif
 }
 
 void gen_data() {
+#ifdef DEBUG
+	printf("gen_data called......\n");
+#endif
 	h_shuffled_dataset = (double *)malloc(data_bytes);
 	for(int t = 0; t < tests; t++) {
 		// shuffle whole day arrays
 		random_shuffle(++raw_price_data.begin(), raw_price_data.end());
-
+		
 		// copy shuffled arrays into 1D array
 		for(int i = 0; i < days; i++) {
 			int off = stonks * (t * days + i);
 			memcpy(&h_shuffled_dataset[off], &raw_price_data[i][0],
 			       stonks * sizeof(double));
-
-#ifdef DEBUG
-			for(int j = 0; j < stonks; j++) {
-				cout << off << " " << h_shuffled_dataset[off + j] << endl;
-			}
-#endif
-#ifdef DEBUG
-			cout << endl;
-#endif
 		}
-#ifdef DEBUG
-		cout << endl;
-#endif
 	}
+#ifdef DEBUG
+	for(int t = 0; t < tests; t++) {
+		printf("test %d\n", t);
+		for(int i = 0; i < days; i++) {
+			printf("\tday %d\n", i);
+			int off = stonks * (t * days + i);
+			printf("\t\t");
+			for(int j = 0; j < stonks; j++) {
+				printf("%.4lf\t", h_shuffled_dataset[off + j]);
+			}
+			printf("\n");
+		}
+	}
+	
+	printf("gen_data exited......\n");
+#endif
 }
 
 void backtest() {
+	printf("backtest called......\n");
+	
 	// copy to device
 	cudaMalloc(&d_shuffled_dataset, data_bytes);
 	cudaMemcpy(d_shuffled_dataset, h_shuffled_dataset, data_bytes,
 	           cudaMemcpyHostToDevice);
-
+	
 	// output array
 	h_output = (double *)malloc(data_bytes);
 	cudaMalloc(&d_output, data_bytes);
-
+	
 	// execute strategy
 	int grid_dim = (tests + BLOCK_DIM - 1) / BLOCK_DIM;
 	ExecuteStrategy<<<grid_dim, BLOCK_DIM>>>(d_output, d_shuffled_dataset,
 	                                         tests, stonks, days);
 	cudaDeviceSynchronize();
-
+	
 	// device -> host
 	cudaMemcpy(h_output, d_output, data_bytes, cudaMemcpyDeviceToHost);
-
+	
 	// print trades
-	cout << "trades" << endl;
+	printf("trades\n");
 	for(int t = 0; t < tests; t++) {
+		printf("test %d\n", t);
 		for(int i = 0; i < days; i++) {
+			printf("\tday %d\n", i);
+			int off = stonks * (t * days + i);
+			printf("\t\t");
 			for(int j = 0; j < stonks; j++) {
-				int off = stonks * (t * days + i) + j;
-				// h_shuffled_dataset[off] = raw_price_data[i][j];
-				cout << off << " " << h_output[off] << endl;
+				printf("%.4lf\t", h_output[off + j]);
 			}
-			cout << endl;
+			printf("\n");
 		}
-		cout << endl;
 	}
+	
+	printf("backtest exited......\n");
+	
 	return;
 }
 
@@ -141,8 +160,10 @@ int main(int argc, char **argv) {
 	auto args = parse_args(argc, argv, FLAGS, OPTS);
 	auto filename = args["-i"];
 	tests = stoi(args["-t"]);
+	
 	load_data(filename);
 	gen_data();
 	backtest();
+	
 	return 0;
 }
