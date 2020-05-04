@@ -41,6 +41,4 @@ struct KalmanResult {
 KalmanResult kalman_update(int stonks, int days, double *x, double *P,
                            const double z, const double *H, const double Q);
 
-KalmanResult kalman_cuda_update(const int N, double *x, double *P,
-                                const double *prices);
 #endif

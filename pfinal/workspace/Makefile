@@ -1,15 +1,15 @@
 TGTS = kalman_seq backtest_cuda
-TGT_OBJS = kalman_seq.o backtest_cuda.o
+TGT_OBJS = kalman_seq.o backtest_cuda.o kalman.o
 CC = g++
 CXXFLAGS = -std=c++11 -O3
 LDFLAGS = -lcblas
 NVCC = nvcc -arch=sm_61
-OBJS = argparse.o kalman.o
+OBJS = argparse.o
 
 all : $(TGTS)
 
-kalman_seq : kalman_seq.o $(OBJS)
-	$(CC) $(LDFLAGS) -o kalman_seq kalman_seq.o $(OBJS)
+kalman_seq : kalman_seq.o kalman.o $(OBJS)
+	$(CC) $(LDFLAGS) -o kalman_seq kalman_seq.o kalman.o $(OBJS)
 
 backtest_cuda : backtest_cuda.o $(OBJS)
 	$(NVCC) -o backtest_cuda backtest_cuda.o $(OBJS)

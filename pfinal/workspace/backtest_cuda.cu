@@ -21,7 +21,105 @@ double *d_price_data, *d_shuffled_dataset, *d_output;
 // following entries: changes in prices
 vector<vector<double>> raw_price_data;
 
-__device__ void kalman(int N, int days, const double *prices, double *pnl) {
+__device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x, double *P,
+                                           const double *prices) {
+	auto N2 = N * N;
+	auto Q = DELTA / (1 - DELTA);
+	auto z = prices[obs];
+
+	/////////////
+	// predict //
+	/////////////
+
+	// state prediction
+
+	auto x_apriori = x;
+
+	// state covariance prediction
+
+	double *P_apriori;
+	cudaMalloc(&P_apriori, N2 * sizeof(double));
+	for(int j = 0; j < N; j++) {
+		for(int i = 0; i < N; i++) {
+			auto idx = i + j * N;
+			P_apriori[idx] = P[idx];
+			if(i == j)
+				P_apriori[idx] += Q;
+		}
+	}
+
+	///////////////
+	// calculate //
+	///////////////
+
+	// innovation residual
+
+	double y = z;
+	int i_x = 0;
+    for(int i_p = 0; i_p < N; i_p++) {
+	    if(i_p == obs) {
+		    y -= x_apriori[N - 1];
+	    } else {
+		    y -= prices[i_p] * x_apriori[i_x];
+		    i_x++;
+	    }
+    }
+
+	// innovation covariance
+
+	double s = R;
+	double *P_H;
+    cudaMalloc(&P_H, N * sizeof(double));
+    for(int j = 0; j < N; j++) {
+	    for(int i = 0; i < N; i++) {
+		    P_H[i] += H[i] * P_apriori[i + j * N];
+	    }
+    }
+    for(int i = 0; i < N; i++) {
+	    s += H[i] * P_H[i];
+    }
+
+    // kalman gain
+
+    double *K;
+    cudaMalloc(&K, N * sizeof(double));
+    for(int i = 0; i < N; i++) {
+	    K[i] = P_H[i] / s;
+    }
+
+	////////////
+	// update //
+	////////////
+
+	// state update
+
+    for(int i = 0; i < N; i++) {
+	    x[i] += y * K[i];
+    }
+
+    // covariance update
+
+    double *diff;
+    cudaMalloc(&diff, N2 * sizeof(double));
+	for(int j = 0; j < N; j++) {
+		for(int i = 0; i < N; i++) {
+			diff[i + j * N] = (i == j ? 1 : 0) - K[i] * H[j];
+		}
+	}
+	for(int j = 0; j < N; j++) {
+		for(int i = 0; i < N; i++) {
+			double dot = 0;
+			for(int k = 0; k < N; k++) {
+				dot += diff[i + k * N] * P_apriori[k + j * N];
+			}
+			P[i + j * N] = dot;
+		}
+	}
+
+	return KalmanResult{y, s};
+}
+
+__device__ void kalman_cuda(int N, int days, const double *prices, double *pnl) {
 	auto N2 = N * N;
 
 	double *x;
@@ -34,7 +132,6 @@ __device__ void kalman(int N, int days, const double *prices, double *pnl) {
 			P[i + j * N] = i == j ? P0 : 0;
 		}
 	}
-	auto Q = DELTA / (1 - DELTA);
 
 	int position = 0;
 	double exit_zscore;
@@ -47,7 +144,7 @@ __device__ void kalman(int N, int days, const double *prices, double *pnl) {
 		auto py = prices[d * N + 1];
 		auto beta = x[0];
 		auto intc = x[1];
-		auto result = kalman_cuda_update(N, x, P, prices);
+		auto result = kalman_cuda_update(N, 1, x, P, prices);
 		if(d < TRAINING_DAYS) {
 			pnl[d] = 0;
 			continue;
@@ -95,7 +192,7 @@ __global__ void ExecuteStrategy(double *d_output, double *d_shuffled_dataset,
 
 	// flat array
 	int base = test_id * stonks * days;
-	kalman(stonks, days, &d_shuffled_dataset[base], &d_output[base]);
+	kalman_cuda(stonks, days, &d_shuffled_dataset[base], &d_output[base]);
 	return;
 }
 
@@ -154,7 +251,7 @@ void gen_data() {
 					h_shuffled_dataset[off + j] = raw_price_data[i][j];
 				} else {
 					h_shuffled_dataset[off + j] =
-					    raw_price_data[i][j] + raw_price_data[i - 1][j];
+					    raw_price_data[i][j] + h_shuffled_dataset[off - stonks + j];
 				}
 			}
 		}
