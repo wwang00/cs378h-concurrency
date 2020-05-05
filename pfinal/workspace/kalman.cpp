@@ -6,10 +6,20 @@
 #include "cblas.h"
 #include "kalman.h"
 
-KalmanResult kalman_update(int stonks, int days, double *x, double *P,
-                           const double z, const double *H, const double Q) {
-	int N = stonks;
-	int N2 = N * N;
+KalmanResult kalman_update(int N, int obs, double *x, double *P,
+                           const double *prices) {
+	auto N2 = N * N;
+	auto Q = DELTA / (1 - DELTA);
+	auto z = prices[obs];
+    double H[N];
+	int i_H = 0;
+	for(int i = 0; i < N; i++) {
+		if(i == obs)
+			continue;
+		H[i_H] = prices[i];
+		i_H++;
+	}
+	H[i_H] = 1;
 
 	/////////////
 	// predict //
@@ -17,8 +27,7 @@ KalmanResult kalman_update(int stonks, int days, double *x, double *P,
 
 	// state prediction
 
-	double x_apriori[N];
-	cblas_dcopy(N, x, 1, x_apriori, 1);
+	auto x_apriori = x;
 
 	// state covariance prediction
 
@@ -38,21 +47,32 @@ KalmanResult kalman_update(int stonks, int days, double *x, double *P,
 
 	// innovation residual
 
-	double y = z - cblas_ddot(N, H, 1, x_apriori, 1);
+	double y = z;
+	for(int i = 0; i < N; i++) {
+		y -= H[i] * x_apriori[i];
+	}
 
 	// innovation covariance
 
-	double s;
+	double s = R;
 	double P_H[N];
-	cblas_dgemv(CblasColMajor, CblasNoTrans, N, N, 1, P_apriori, N, H, 1, 0,
-	            P_H, 1);
-	s = cblas_ddot(N, H, 1, P_H, 1) + R;
+	for(int i = 0; i < N; i++) {
+		double dot = 0;
+		for(int j = 0; j < N; j++) {
+			dot += P_apriori[i + j * N] * H[j];
+		}
+		P_H[i] = dot;
+	}
+	for(int i = 0; i < N; i++) {
+		s += H[i] * P_H[i];
+	}
 
 	// kalman gain
 
 	double K[N];
-	cblas_dgemv(CblasColMajor, CblasNoTrans, N, N, 1 / s, P_apriori, N, H, 1, 0,
-	            K, 1);
+	for(int i = 0; i < N; i++) {
+		K[i] = P_H[i] / s;
+	}
 
 	////////////
 	// update //
@@ -60,20 +80,27 @@ KalmanResult kalman_update(int stonks, int days, double *x, double *P,
 
 	// state update
 
-	cblas_dcopy(N, x_apriori, 1, x, 1);
-	cblas_daxpy(N, y, K, 1, x, 1);
+	for(int i = 0; i < N; i++) {
+		x[i] += y * K[i];
+	}
 
 	// covariance update
 
 	double diff[N2];
 	for(int j = 0; j < N; j++) {
 		for(int i = 0; i < N; i++) {
-			diff[i + j * N] = i == j ? 1 : 0;
+			diff[i + j * N] = (i == j ? 1 : 0) - K[i] * H[j];
 		}
 	}
-	cblas_dger(CblasColMajor, N, N, -1, K, 1, H, 1, diff, N);
-	cblas_dgemm(CblasColMajor, CblasNoTrans, CblasNoTrans, N, N, N, 1, diff, N,
-	            P_apriori, N, 0, P, N);
+	for(int j = 0; j < N; j++) {
+		for(int i = 0; i < N; i++) {
+			double dot = 0;
+			for(int k = 0; k < N; k++) {
+				dot += diff[i + k * N] * P_apriori[k + j * N];
+			}
+			P[i + j * N] = dot;
+		}
+	}
 
 	return KalmanResult{y, s};
 }

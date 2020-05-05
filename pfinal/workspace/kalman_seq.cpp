@@ -26,14 +26,13 @@ int main(int argc, char **argv) {
 
 	// read price series
 
-	auto z = (double *)calloc(days, sizeof(double));
-	auto H = (double *)calloc(days * N, sizeof(double));
+	auto prices = (double *)calloc(days * N, sizeof(double));
 	for(int d = 0; d < days; d++) {
-		double x, y;
-		fscanf(ifile, "%lf\t%lf", &x, &y);
-		H[d * N] = x;
-		H[d * N + 1] = 1;
-		z[d] = y;
+		double price;
+		for(int i = 0; i < N; i++) {
+			fscanf(ifile, "%lf", &price);
+			prices[d * N + i] = price;
+		}
 	}
 
 	// do kalman
@@ -43,7 +42,6 @@ int main(int argc, char **argv) {
 	for(int i = 0; i < N; i++) {
 		P[i + i * N] = P0;
 	}
-	auto Q = DELTA / (1 - DELTA);
 
 	int position = 0;
 	double exit_zscore;
@@ -52,11 +50,11 @@ int main(int argc, char **argv) {
 	double total_pnl = 0;
 	int total_trades = 0;
 	for(int d = 0; d < days; d++) {
-		auto px = H[d * N];
-		auto py = z[d];
+		auto px = prices[d * N];
+		auto py = prices[d * N + 1];
 		auto beta = x[0];
 		auto intc = x[1];
-		auto result = kalman_update(N, days, x, P, z[d], &H[d * N], Q);
+		auto result = kalman_update(N, 1, x, P, prices + d * N);
 		if(d < TRAINING_DAYS)
 			continue;
 		int sgn = result.y < 0 ? -1 : 1;

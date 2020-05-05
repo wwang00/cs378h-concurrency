@@ -38,7 +38,7 @@ struct KalmanResult {
  * x: current hidden state estimate
  * P: current covariance matrix estimate
  */
-KalmanResult kalman_update(int stonks, int days, double *x, double *P,
-                           const double z, const double *H, const double Q);
+KalmanResult kalman_update(int N, int obs, double *x, double *P,
+                           const double *prices);
 
 #endif
