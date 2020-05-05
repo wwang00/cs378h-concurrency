@@ -39,11 +39,6 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
 	}
 	H[i_H] = 1;
 
-    printf("H\n");
-    for(int i = 0; i < N; i++) {
-        printf("%.2lf ", H[i]);
-    }
-    printf("\n");
 
 	/////////////
 	// predict //
@@ -52,12 +47,6 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
 	// state prediction
 
 	auto x_apriori = x;
-
-    printf("x_apriori\n");
-    for(int i = 0; i < N; i++) {
-        printf("%.2lf ", x_apriori[i]);
-    }
-    printf("\n");
 
 	// state covariance prediction
 
@@ -71,14 +60,6 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
 		}
 	}
 
-	printf("P_apriori\n");
-	for(int i = 0; i < N; i++) {
-		for(int j = 0; j < N; j++) {
-			printf("%.2lf ", P_apriori[i + j * N]);
-		}
-		printf("\n");
-	}
-
 	///////////////
 	// calculate //
 	///////////////
@@ -89,9 +70,6 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
     for(int i = 0; i < N; i++) {
 	    y -= H[i] * x_apriori[i];
     }
-
-	printf("y %.2lf\n", y);
-	printf("z %.2lf\n", z);
 
 	// innovation covariance
 
@@ -108,20 +86,12 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
 	    s += H[i] * P_H[i];
     }
 
-	printf("s %.2lf\n", s);
-
     // kalman gain
 
     auto K = P_H + N;
     for(int i = 0; i < N; i++) {
 	    K[i] = P_H[i] / s;
     }
-
-	printf("K\n");
-	for(int i = 0; i < N; i++) {
-		printf("%.2lf ", K[i]);
-	}
-	printf("\n");
 
 	////////////
 	// update //
@@ -151,7 +121,6 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
 		}
 	}
 
-	printf("\n");
 	return KalmanResult{y, s};
 }
 
@@ -279,7 +248,7 @@ void gen_data() {
 	h_prices = (double *)malloc(data_bytes);
 	for(int t = 0; t < tests; t++) {
 		// shuffle whole day arrays
-		//random_shuffle(++raw_price_data.begin(), raw_price_data.end());
+		random_shuffle(++raw_price_data.begin(), raw_price_data.end());
 
 		// copy and accumulate shuffled arrays
 		for(int i = 0; i < days; i++) {
