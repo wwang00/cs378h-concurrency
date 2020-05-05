@@ -6,11 +6,11 @@
 #include "argparse.h"
 #include "kalman.h"
 
-#define DEBUG
+//#define DEBUG
 
 using namespace std;
 
-#define GRID_DIM (tests + BLOCK_DIM - 1) / BLOCK_DIM
+#define GRID_DIM tests
 #define BLOCK_DIM 32
 
 int stonks, days, tests;
@@ -125,7 +125,9 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
 }
 
 __device__ void kalman_cuda(int N, int days, const double *prices, double *pnl, double *scratch) {
+#ifdef DEBUG
 	printf("kalman_cuda called......\n");
+#endif
 
 	auto N2 = N * N;
 
@@ -148,7 +150,7 @@ __device__ void kalman_cuda(int N, int days, const double *prices, double *pnl, 
 		auto px = prices[d * N];
 		auto py = prices[d * N + 1];
 		auto beta = x[0];
-		auto intc = x[1];
+		//auto intc = x[1];
 		auto result = kalman_cuda_update(N, 1, x, P, &prices[d * N], P + N2);
 		if(d < TRAINING_DAYS) {
 			pnl[d] = 0;
@@ -186,24 +188,33 @@ __device__ void kalman_cuda(int N, int days, const double *prices, double *pnl, 
 
 		pnl[d] = total_pnl;
 	}
+#ifdef DEBUG
 	printf("kalman_cuda exited......\n");
+#endif
 }
 
 __global__ void ExecuteStrategy(int tests, int stonks, int days, double *prices, double *pnl, double *scratch) {
+#ifdef DEBUG
 	printf("ExecuteStrategy called......\n");
+#endif
 
     // check bounds
-    int test_id = blockDim.x * blockIdx.x + threadIdx.x;
+	int test_id = blockIdx.x;
     if(test_id >= tests) return;
 
+#ifdef DEBUG
     printf("Hello from block %d, thread %d, test_id %d of %d\n", blockIdx.x, threadIdx.x, test_id, tests);
+#endif
+
     // flat array
     int data_base = test_id * stonks * days;
     int out_base = test_id * days;
     int scratch_base = test_id * (3 * stonks * stonks + 4 * stonks);
 	kalman_cuda(stonks, days, &prices[data_base], &pnl[out_base], &scratch[scratch_base]);
 
+#ifdef DEBUG
 	printf("ExecuteStrategy exited......\n");
+#endif
 }
 
 void load_data(string filename) {
@@ -251,7 +262,8 @@ void gen_data() {
 	h_prices = (double *)malloc(data_bytes);
 	for(int t = 0; t < tests; t++) {
 		// shuffle whole day arrays
-		random_shuffle(++raw_price_data.begin(), raw_price_data.end());
+		srand(time(0));
+		//random_shuffle(++raw_price_data.begin(), raw_price_data.end());
 
 		// copy and accumulate shuffled arrays
 		for(int i = 0; i < days; i++) {
