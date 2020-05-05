@@ -11,7 +11,7 @@
 using namespace std;
 
 #define GRID_DIM 1
-#define BLOCK_DIM 1
+#define BLOCK_DIM 32
 
 int stonks, days, tests;
 int data_bytes, out_bytes, scratch_bytes;
@@ -196,9 +196,12 @@ __global__ void ExecuteStrategy(int tests, int stonks, int days, double *prices,
     int test_id = blockDim.x * blockIdx.x + threadIdx.x;
     if(test_id >= tests) return;
 
+    printf("Hello from block %d, thread %d, test_id %d of %d\n", blockIdx.x, threadIdx.x, test_id, tests);
     // flat array
-    int base = test_id * stonks * days;
-	kalman_cuda(stonks, days, &prices[base], &pnl[base], &scratch[base]);
+    int data_base = test_id * stonks * days;
+    int out_base = test_id * days;
+    int scratch_base = test_id * (3 * stonks * stonks + 4 * stonks);
+	kalman_cuda(stonks, days, &prices[data_base], &pnl[out_base], &scratch[scratch_base]);
 
 	printf("ExecuteStrategy exited......\n");
 }
@@ -248,7 +251,7 @@ void gen_data() {
 	h_prices = (double *)malloc(data_bytes);
 	for(int t = 0; t < tests; t++) {
 		// shuffle whole day arrays
-		random_shuffle(++raw_price_data.begin(), raw_price_data.end());
+		// random_shuffle(++raw_price_data.begin(), raw_price_data.end());
 
 		// copy and accumulate shuffled arrays
 		for(int i = 0; i < days; i++) {
