@@ -26,6 +26,8 @@ vector<vector<double>> raw_price_data;
 
 __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x, double *P,
                                            const double *prices, double *scratch) {
+	auto tid = threadIdx.x;
+
 	auto N2 = N * N;
 	auto Q = DELTA / (1 - DELTA);
 	auto z = prices[obs];
@@ -51,7 +53,7 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
 	// state covariance prediction
 
 	auto P_apriori = H + N;
-	for(int j = 0; j < N; j++) {
+	for(int j = tid; j < N; j += BLOCK_DIM) {
 		for(int i = 0; i < N; i++) {
 			auto idx = i + j * N;
 			P_apriori[idx] = P[idx];
@@ -75,7 +77,7 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
 
 	double s = R;
 	auto P_H = P_apriori + N2;
-    for(int i = 0; i < N; i++) {
+    for(int i = tid; i < N; i += BLOCK_DIM) {
 	    double dot = 0;
 	    for(int j = 0; j < N; j++) {
 		    dot += P_apriori[i + j * N] * H[j];
@@ -89,7 +91,7 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
     // kalman gain
 
     auto K = P_H + N;
-    for(int i = 0; i < N; i++) {
+    for(int i = tid; i < N; i += BLOCK_DIM) {
 	    K[i] = P_H[i] / s;
     }
 
@@ -99,19 +101,19 @@ __device__ KalmanResult kalman_cuda_update(const int N, const int obs, double *x
 
 	// state update
 
-    for(int i = 0; i < N; i++) {
+    for(int i = tid; i < N; i += BLOCK_DIM) {
 	    x[i] += y * K[i];
     }
 
     // covariance update
 
     auto diff = K + N;
-	for(int j = 0; j < N; j++) {
+	for(int j = tid; j < N; j += BLOCK_DIM) {
 		for(int i = 0; i < N; i++) {
 			diff[i + j * N] = (i == j ? 1 : 0) - K[i] * H[j];
 		}
 	}
-	for(int j = 0; j < N; j++) {
+	for(int j = tid; j < N; j += BLOCK_DIM) {
 		for(int i = 0; i < N; i++) {
 			double dot = 0;
 			for(int k = 0; k < N; k++) {
