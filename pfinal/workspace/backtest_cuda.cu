@@ -10,7 +10,7 @@
 
 using namespace std;
 
-#define GRID_DIM 1
+#define GRID_DIM (tests + BLOCK_DIM - 1) / BLOCK_DIM
 #define BLOCK_DIM 32
 
 int stonks, days, tests;
@@ -251,7 +251,7 @@ void gen_data() {
 	h_prices = (double *)malloc(data_bytes);
 	for(int t = 0; t < tests; t++) {
 		// shuffle whole day arrays
-		// random_shuffle(++raw_price_data.begin(), raw_price_data.end());
+		random_shuffle(++raw_price_data.begin(), raw_price_data.end());
 
 		// copy and accumulate shuffled arrays
 		for(int i = 0; i < days; i++) {

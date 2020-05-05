@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DATA=EWA-EWC
-TESTS=2
+TESTS=33
 
 IFILE=$PWD/input/$DATA-input.txt
 
