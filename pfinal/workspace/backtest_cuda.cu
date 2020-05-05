@@ -13,7 +13,8 @@ using namespace std;
 #define GRID_DIM 1
 #define BLOCK_DIM 1
 
-int stonks, days, tests, data_bytes;
+int stonks, days, tests;
+int data_bytes, out_bytes, scratch_bytes;
 
 double *h_prices, *h_pnl;
 double *d_prices, *d_pnl;
@@ -219,11 +220,16 @@ __device__ void kalman_cuda(int N, int days, const double *prices, double *pnl, 
 	printf("kalman_cuda exited......\n");
 }
 
-__global__ void ExecuteStrategy(int N, int days, double *prices, double *pnl, double *scratch) {
+__global__ void ExecuteStrategy(int tests, int stonks, int days, double *prices, double *pnl, double *scratch) {
 	printf("ExecuteStrategy called......\n");
 
-	// TODO loop through tests
-	kalman_cuda(N, days, prices, pnl, scratch);
+    // check bounds
+    int test_id = blockDim.x * blockIdx.x + threadIdx.x;
+    if(test_id >= tests) return;
+
+    // flat array
+    int base = test_id * stonks * days;
+	kalman_cuda(stonks, days, &prices[base], &pnl[base], &scratch[base]);
 
 	printf("ExecuteStrategy exited......\n");
 }
@@ -314,20 +320,25 @@ void backtest() {
 	cudaMemcpy(d_prices, h_prices, data_bytes,
 	           cudaMemcpyHostToDevice);
 
+	out_bytes = tests * days * sizeof(double);
 	// output array
-	h_pnl = (double *)malloc(days * sizeof(double));
-	cudaMalloc(&d_pnl, days * sizeof(double));
+	h_pnl = (double *)malloc(out_bytes);
+	cudaMalloc(&d_pnl, out_bytes);
 
-	cudaMalloc(&scratch, (3 * stonks * stonks + 4 * stonks) * sizeof(double));
+	scratch_bytes = tests * (3 * stonks * stonks + 4 * stonks) * sizeof(double);
+	cudaMalloc(&scratch, scratch_bytes);
 
 	// execute strategy
-	ExecuteStrategy<<<GRID_DIM, BLOCK_DIM>>>(stonks, days, d_prices, d_pnl, scratch);
+	ExecuteStrategy<<<GRID_DIM, BLOCK_DIM>>>(tests, stonks, days, d_prices, d_pnl, scratch);
 	cudaDeviceSynchronize();
 
 	// device -> host
-	cudaMemcpy(h_pnl, d_pnl, days * sizeof(double), cudaMemcpyDeviceToHost);
+	cudaMemcpy(h_pnl, d_pnl, out_bytes, cudaMemcpyDeviceToHost);
 
-	printf("total P&L: %.4lf\n", h_pnl[days - 1]);
+	for(int t = 0; t < tests; t++) {
+		int off = t * days;
+		printf("Test %d - total P&L: %.4lf\n", t, h_pnl[off + days - 1]);
+	}
 
 	printf("backtest exited......\n");
 	return;
