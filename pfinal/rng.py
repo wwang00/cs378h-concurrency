@@ -1,16 +1,18 @@
 import random
 import sys
 
-N = int(sys.argv[1])
-F = sys.argv[2]
+F = '/Users/william/cs378h-concurrency/pfinal/input/random-500-1000.txt'
 
-M = 2
-B = 50
-V = 10
+N = 500
+days = 1000
+
+prices = [random.uniform(100, 200) for _ in range(N)]
 
 with open(F, "w") as ofile:
+    ofile.write("%d\t%d\n" % (N, days))
     for _ in range(N):
-        x = random.uniform(1, 100)
-        # y = random.uniform(1, 100)
-        y = M * x + B + random.gauss(0, V)
-        ofile.write("%.2f\t%.2f\n" % (x, y))
+        diff = [random.gauss(0, 1) for _ in range(N)]
+        for i in range(len(prices)):
+            prices[i] += diff[i]
+            ofile.write("%.2f\t" % prices[i])
+        ofile.write("\n")

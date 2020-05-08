@@ -11,7 +11,7 @@ KalmanResult kalman_update(int N, int obs, double *x, double *P,
 	auto N2 = N * N;
 	auto Q = DELTA / (1 - DELTA);
 	auto z = prices[obs];
-    double H[N];
+	double H[N];
 	int i_H = 0;
 	for(int i = 0; i < N; i++) {
 		if(i == obs)
@@ -21,6 +21,14 @@ KalmanResult kalman_update(int N, int obs, double *x, double *P,
 	}
 	H[i_H] = 1;
 
+	if(obs == 1) {
+		printf("H\n");
+		for(int i = 0; i < N; i++) {
+			printf("%.2lf\t", H[i]);
+		}
+		printf("\n");
+	}
+
 	/////////////
 	// predict //
 	/////////////
@@ -28,6 +36,14 @@ KalmanResult kalman_update(int N, int obs, double *x, double *P,
 	// state prediction
 
 	auto x_apriori = x;
+
+	if(obs == 1) {
+		printf("x_apriori\n");
+		for(int i = 0; i < N; i++) {
+			printf("%.2lf\t", x_apriori[i]);
+		}
+		printf("\n");
+	}
 
 	// state covariance prediction
 
@@ -41,6 +57,16 @@ KalmanResult kalman_update(int N, int obs, double *x, double *P,
 		}
 	}
 
+	if(obs == 1) {
+		printf("P_apriori\n");
+		for(int i = 0; i < N; i++) {
+			for(int j = 0; j < N; j++) {
+				printf("%.2lf\t", P_apriori[i + j * N]);
+			}
+			printf("\n");
+		}
+	}
+
 	///////////////
 	// calculate //
 	///////////////
@@ -50,7 +76,11 @@ KalmanResult kalman_update(int N, int obs, double *x, double *P,
 	double y = z;
 	for(int i = 0; i < N; i++) {
 		y -= H[i] * x_apriori[i];
-	}
+	}                                                                                                                                                                                                                                                                           
+                                                                                                                                                                                                                                                                                
+    if(obs == 1) {                                                                                                                                                                                                                                                  
+        printf("y %.2lf\n", y);                                                                                                                                                                                                                                                 
+    }
 
 	// innovation covariance
 
@@ -65,7 +95,11 @@ KalmanResult kalman_update(int N, int obs, double *x, double *P,
 	}
 	for(int i = 0; i < N; i++) {
 		s += H[i] * P_H[i];
-	}
+	}                                                                                                                                                                                                                                                                           
+                                                                                                                                                                                                                                                                                
+    if(obs == 1) {                                                                                                                                                                                                                                                  
+        printf("s %.2lf\n", s);                                                                                                                                                                                                                                                 
+    }
 
 	// kalman gain
 
@@ -100,6 +134,10 @@ KalmanResult kalman_update(int N, int obs, double *x, double *P,
 			}
 			P[i + j * N] = dot;
 		}
+	}
+
+	if(obs == 1) {
+		printf("\n\n");
 	}
 
 	return KalmanResult{y, s};
