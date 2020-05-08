@@ -6,7 +6,7 @@
 #include "argparse.h"
 #include "kalman.h"
 
-#define DEBUG
+// #define DEBUG
 
 using namespace std;
 
@@ -19,7 +19,6 @@ double *scratch; // workspace for cuda routine
 // first entry: initial prices
 // following entries: changes in prices
 vector<vector<double>> raw_price_data;
-
 
 void load_data(string filename) {
 #ifdef DEBUG
@@ -107,11 +106,22 @@ void backtest() {
 	// output array
 	h_pnl = (double *)malloc(out_bytes);
 
+	auto N = stonks;
+	auto N2 = N * N;
+
+	auto x = (double *)calloc(N, sizeof(double));
+	auto P = (double *)calloc(N2, sizeof(double));
+	for(int i = 0; i < N; i++) {
+		P[i + i * N] = P0;
+	}
+
 	for(int t = 0; t < tests; t++) {
 		// flat array
 		int data_base = t * stonks * days;
 		int out_base = t * days;
-		// kalman_cuda(stonks, days, &prices[data_base], &pnl[out_base], &scratch[scratch_base]);
+		for(int d = 0; d < days; d++) {
+			kalman_update(stonks, 1, x, P, &h_prices[data_base + d * stonks]);
+		}
 	}
 
 	for(int t = 0; t < tests; t++) {
