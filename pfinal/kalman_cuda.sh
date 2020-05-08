@@ -9,6 +9,6 @@ rm -f $OFILE
 cd workspace
 make kalman_cuda
 
-./kalman_cuda -i $IFILE -o $OFILE -g 16 -b 32
+./kalman_cuda -i $IFILE -o $OFILE -g 16 -b 128
 
 cd ..
