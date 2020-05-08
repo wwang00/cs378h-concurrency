@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <chrono>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -50,11 +51,25 @@ int main(int argc, char **argv) {
 	double total_pnl = 0;
 	int total_trades = 0;
 	for(int d = 0; d < days; d++) {
+		printf("day %d\n", d);
+
 		auto px = prices[d * N];
 		auto py = prices[d * N + 1];
 		auto beta = x[0];
 		auto intc = x[1];
-		auto result = kalman_update(N, 1, x, P, prices + d * N);
+
+		auto t0 = chrono::system_clock::now();
+		long elapsed;
+
+		KalmanResult result;
+		for(int obs = 0; obs < N; obs++) {
+			result = kalman_update(N, obs, x, P, prices + d * N);
+		}
+
+		auto t1 = chrono::system_clock::now();
+		elapsed = (long)((t1 - t0) / chrono::microseconds(1));
+		printf("kalman %ld\n", elapsed);
+
 		if(d < TRAINING_DAYS)
 			continue;
 		int sgn = result.y < 0 ? -1 : 1;

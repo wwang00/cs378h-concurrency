@@ -1,9 +1,9 @@
 import random
 import sys
 
-F = '/Users/william/cs378h-concurrency/pfinal/input/random-500-1000.txt'
+F = '/u/wwang00/cs378h-concurrency/pfinal/input/random-100-1000-input.txt'
 
-N = 500
+N = 100
 days = 1000
 
 prices = [random.uniform(100, 200) for _ in range(N)]

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DATA=EWA-EWC
+DATA=random-100-1000
 
 IFILE=$PWD/input/$DATA-input.txt
 OFILE=$PWD/output/$DATA-output.txt
