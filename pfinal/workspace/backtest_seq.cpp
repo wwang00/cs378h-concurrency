@@ -6,7 +6,7 @@
 #include "argparse.h"
 #include "kalman.h"
 
-//#define DEBUG
+#define DEBUG
 
 using namespace std;
 

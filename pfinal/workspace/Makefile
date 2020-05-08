@@ -2,7 +2,6 @@ TGTS = kalman_seq backtest_cuda kalman_cuda
 TGT_OBJS = kalman_seq.o kalman_cuda.o backtest_cuda.o kalman.o
 CC = g++
 CXXFLAGS = -std=c++11 -O3
-LDFLAGS = -lcblas
 NVCC = nvcc -arch=sm_61
 OBJS = argparse.o
 
