@@ -20,6 +20,12 @@ kalman_cuda.o : kalman_cuda.cu
 backtest_cuda : backtest_cuda.o $(OBJS)
 	$(NVCC) -o backtest_cuda backtest_cuda.o $(OBJS)
 
+backtest_seq : backtest_seq.o kalman.o $(OBJS)
+	$(CC) $(LDFLAGS) -o backtest_seq backtest_seq.o kalman.o $(OBJS)
+
+backtest_seq.o : backtest_cuda.cu
+	$(CC) -c backtest_seq.cpp
+
 backtest_cuda.o : backtest_cuda.cu
 	$(NVCC) -c backtest_cuda.cu
 
