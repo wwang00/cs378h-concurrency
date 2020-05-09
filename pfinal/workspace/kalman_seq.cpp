@@ -51,7 +51,7 @@ int main(int argc, char **argv) {
 	double total_pnl = 0;
 	int total_trades = 0;
 	for(int d = 0; d < days; d++) {
-		printf("day %d\n", d);
+		//printf("day %d\n", d);
 
 		auto px = prices[d * N];
 		auto py = prices[d * N + 1];
@@ -68,7 +68,8 @@ int main(int argc, char **argv) {
 
 		auto t1 = chrono::system_clock::now();
 		elapsed = (long)((t1 - t0) / chrono::microseconds(1));
-		printf("kalman %ld\n", elapsed);
+		if(d > 100)
+			printf("%ld\n", elapsed);
 
 		if(d < TRAINING_DAYS)
 			continue;
@@ -102,15 +103,15 @@ int main(int argc, char **argv) {
 			position = 0;
 		}
 
-		fprintf(ofile, "%.4lf\t%.4lf\t%.4lf\t%.4lf\t%.4lf\n", beta, intc,
-		        result.y, result.s, total_pnl);
+		//fprintf(ofile, "%.4lf\t%.4lf\t%.4lf\t%.4lf\t%.4lf\n", beta, intc,
+		//        result.y, result.s, total_pnl);
 	}
 
 	// print
 
-	printf("trades: %d\n", total_trades);
-	printf("coefficient: %.4lf, intercept: %.4lf\n", x[0], x[1]);
-	printf("total P&L: %.4lf\n", total_pnl);
+	//printf("trades: %d\n", total_trades);
+	//printf("coefficient: %.4lf, intercept: %.4lf\n", x[0], x[1]);
+	//printf("total P&L: %.4lf\n", total_pnl);
 	// printf("%.4lf\n", total_pnl);
 
 	fclose(ifile);

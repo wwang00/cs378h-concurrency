@@ -240,7 +240,7 @@ int main(int argc, char **argv) {
 	// do kalman
 
 	for(int d = 0; d < days; d++) {
-		printf("day %d\n", d);
+		//printf("day %d\n", d);
 
 		// refresh prices
 
@@ -266,7 +266,8 @@ int main(int argc, char **argv) {
 
 		auto t1 = chrono::system_clock::now();
 		elapsed = (long)((t1 - t0) / chrono::microseconds(1));
-		printf("kalman %ld\n", elapsed);
+		if(d > 100)
+			printf("%ld\n", elapsed);
 	}
 
 	cudaFreeHost(h_prices);

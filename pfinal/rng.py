@@ -1,8 +1,8 @@
 import random
 import sys
 
-N = 200
-days = 1000
+N = 150
+days = 120
 F = f'/u/wwang00/cs378h-concurrency/pfinal/input/random-{N}-{days}-input.txt'
 
 prices = [random.uniform(100, 200) for _ in range(N)]
