@@ -22,4 +22,4 @@ Y = [seq[p] / cuda[p] for p in X]
 plt.xlabel('symbols')
 plt.ylabel('speedup')
 plt.plot(X, Y, '-ro')
-#plt.show()
+plt.show()
